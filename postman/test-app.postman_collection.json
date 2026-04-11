@@ -1,0 +1,494 @@
+{
+  "info": {
+    "_postman_id": "fbf58708-9f4f-4ffd-9db2-87e53e6f9a10",
+    "name": "test-app API",
+    "description": "Collection for testing all Laravel API routes in test-app.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" }
+  ],
+  "item": [
+    {
+      "name": "00 Public",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "if (data.access_token) pm.environment.set('access_token', data.access_token);",
+                  "if (data.business_client_id) pm.environment.set('business_client_id', data.business_client_id);",
+                  "if (data.workspace_id) pm.environment.set('workspace_id', data.workspace_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auth Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () { pm.response.to.have.status(200); });",
+                  "var data = pm.response.json();",
+                  "if (data.session && data.session.access_token) pm.environment.set('access_token', data.session.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{new_admin_email}}\",\n  \"password\": \"{{new_admin_password}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/auth/create-admin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Authenticated Core",
+      "item": [
+        {
+          "name": "Auth Me",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/auth/me"
+          }
+        },
+        {
+          "name": "Auth Refresh",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/auth/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var data = pm.response.json();",
+                  "if (data.session && data.session.access_token) pm.environment.set('access_token', data.session.access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"business_client_id\": \"{{business_client_id}}\",\n  \"workspace_id\": \"{{workspace_id}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/auth/create-user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 System Config",
+      "item": [
+        {
+          "name": "Get OpenAI Key Status",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/system-config/openai-api-key"
+          }
+        },
+        {
+          "name": "Update OpenAI Key",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"{{openai_api_key}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/system-config/openai-api-key"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Businesses",
+      "item": [
+        {
+          "name": "Create Business",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_client_id\": \"{{business_client_id}}\",\n  \"name\": \"{{business_name}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/businesses"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var data = pm.response.json();",
+                  "if (data.business_client_id) pm.environment.set('business_client_id', data.business_client_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Businesses",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses"
+          }
+        },
+        {
+          "name": "Get Business",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Workspaces",
+      "item": [
+        {
+          "name": "Create Workspace",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"name\": \"{{workspace_name}}\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var data = pm.response.json();",
+                  "if (data.workspace_id) pm.environment.set('workspace_id', data.workspace_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Workspaces",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces"
+          }
+        },
+        {
+          "name": "Get Workspace",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}"
+          }
+        },
+        {
+          "name": "Delete Workspace",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Workspace Config",
+      "item": [
+        {
+          "name": "Get Workspace Config",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/config"
+          }
+        },
+        {
+          "name": "Update Workspace Config",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"top_k\": 7,\n  \"similarity_threshold\": 0.1,\n  \"chat_model_default\": \"gpt-4.1-mini\",\n  \"chat_temperature_default\": 0.2\n}"
+            },
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/config"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Documents",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "{{upload_file_path}}" },
+                { "key": "chunk_words", "type": "text", "value": "300" },
+                { "key": "overlap_words", "type": "text", "value": "50" }
+              ]
+            },
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/upload"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var data = pm.response.json();",
+                  "if (data.document_id) pm.environment.set('document_id', data.document_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var data = pm.response.json();",
+                  "if (Array.isArray(data) && data.length && data[0].id) pm.environment.set('document_id', data[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Document",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}"
+          }
+        },
+        {
+          "name": "List Document Chunks",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}/chunks?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Reindex Document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}/reindex"
+          }
+        },
+        {
+          "name": "Reindex All",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/reindex-all"
+          }
+        },
+        {
+          "name": "Cancel Document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}/cancel"
+          }
+        },
+        {
+          "name": "Reset Document",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}/reset"
+          }
+        },
+        {
+          "name": "Reset Stuck Documents",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/reset-stuck"
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/admin/businesses/{{business_client_id}}/workspaces/{{workspace_id}}/documents/{{document_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 RAG",
+      "item": [
+        {
+          "name": "Retrieve",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_client_id\": \"{{business_client_id}}\",\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"user_id\": \"{{target_user_id}}\",\n  \"query\": \"Summarize key points from uploaded docs\",\n  \"top_k\": 7\n}"
+            },
+            "url": "{{base_url}}/api/rag/retrieve"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Chat",
+      "item": [
+        {
+          "name": "Test Stream",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "noauth" },
+            "url": "{{base_url}}/api/chat/test-stream"
+          }
+        },
+        {
+          "name": "Generate Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_client_id\": \"{{business_client_id}}\",\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"user_id\": \"{{target_user_id}}\",\n  \"query\": \"What does the document say?\",\n  \"chat_id\": \"{{chat_id}}\",\n  \"chat_title\": \"Postman Chat\"\n}"
+            },
+            "url": "{{base_url}}/api/chat/generate"
+          }
+        },
+        {
+          "name": "Stream Chat",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_client_id\": \"{{business_client_id}}\",\n  \"workspace_id\": \"{{workspace_id}}\",\n  \"user_id\": \"{{target_user_id}}\",\n  \"query\": \"Give me a concise answer\",\n  \"chat_id\": \"{{chat_id}}\"\n}"
+            },
+            "url": "{{base_url}}/api/chat/stream"
+          }
+        },
+        {
+          "name": "Get My Chat Headers",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/chat/headers/me"
+          }
+        },
+        {
+          "name": "Get User Chat History",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/chat/history/{{target_user_id}}"
+          }
+        },
+        {
+          "name": "Delete Chat Header",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/chat/headers/{{chat_id}}"
+          }
+        }
+      ]
+    }
+  ]
+}
