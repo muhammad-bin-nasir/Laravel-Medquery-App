@@ -18,6 +18,18 @@ class ChatApiTestSeeder extends Seeder
 {
     public function run(): void
     {
+        User::query()->firstOrCreate(
+            ['email_normalized' => 'superadmin@system.local'],
+            [
+                'id' => (string) Str::uuid(),
+                'business_id' => null,
+                'workspace_id' => null,
+                'email' => 'superadmin@system.local',
+                'password_hash' => Hash::make('SuperAdmin@12345'),
+                'role' => 'super_admin',
+            ]
+        );
+
         $business = Business::query()->firstOrCreate(
             ['business_client_id' => 'acme'],
             [
@@ -28,7 +40,7 @@ class ChatApiTestSeeder extends Seeder
 
         $workspace = Workspace::query()->firstOrCreate(
             [
-                'business_id' => $business->id,
+                'business_client_id' => $business->business_client_id,
                 'workspace_id' => 'main',
             ],
             [
@@ -41,13 +53,20 @@ class ChatApiTestSeeder extends Seeder
             ['email_normalized' => 'admin@acme.test'],
             [
                 'id' => (string) Str::uuid(),
-                'business_id' => $business->id,
-                'workspace_id' => $workspace->id,
+                'business_id' => null,
+                'workspace_id' => null,
                 'email' => 'admin@acme.test',
                 'password_hash' => Hash::make('Admin@12345'),
                 'role' => 'admin',
             ]
         );
+
+        if ($admin->role !== 'admin' || $admin->business_id !== null || $admin->workspace_id !== null) {
+            $admin->role = 'admin';
+            $admin->business_id = null;
+            $admin->workspace_id = null;
+            $admin->save();
+        }
 
         $business->admin_id = $admin->id;
         $business->save();

@@ -48,6 +48,26 @@ class AdminAuthController extends Controller
             $workspaceId = $workspace?->workspace_id;
         }
 
+        if ($admin->role === 'admin' && (!$businessClientId || !$workspaceId)) {
+            $ownedBusiness = Business::query()
+                ->where('admin_id', $admin->id)
+                ->orderBy('created_at')
+                ->first();
+
+            if ($ownedBusiness) {
+                $businessClientId = $ownedBusiness->business_client_id;
+
+                if (!$workspaceId) {
+                    $ownedWorkspace = Workspace::query()
+                        ->where('business_client_id', $ownedBusiness->business_client_id)
+                        ->orderBy('created_at')
+                        ->first();
+
+                    $workspaceId = $ownedWorkspace?->workspace_id;
+                }
+            }
+        }
+
         $token = $this->jwtTokenService->createForUser($admin);
 
         return response()->json([
@@ -69,7 +89,10 @@ class AdminAuthController extends Controller
 
         $existing = User::query()->where('email_normalized', $emailNormalized)->first();
         if ($existing) {
-            return response()->json(['detail' => 'User already exists'], 400);
+            return response()->json([
+                'detail' => 'User already exists',
+                'code' => 'user_already_exists',
+            ], 409);
         }
 
         User::query()->create([
@@ -125,7 +148,10 @@ class AdminAuthController extends Controller
             ->first();
 
         if ($existing) {
-            return response()->json(['detail' => 'User already exists'], 400);
+            return response()->json([
+                'detail' => 'User already exists',
+                'code' => 'user_already_exists',
+            ], 409);
         }
 
         User::query()->create([

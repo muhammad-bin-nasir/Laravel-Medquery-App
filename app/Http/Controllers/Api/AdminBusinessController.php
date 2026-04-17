@@ -28,7 +28,10 @@ class AdminBusinessController extends Controller
             ->first();
 
         if ($existing) {
-            return response()->json(['detail' => 'Business already exists'], 400);
+            return response()->json([
+                'detail' => 'Business already exists',
+                'code' => 'business_already_exists',
+            ], 409);
         }
 
         $existingName = Business::query()
@@ -36,7 +39,10 @@ class AdminBusinessController extends Controller
             ->first();
 
         if ($existingName) {
-            return response()->json(['detail' => 'Business name already exists'], 400);
+            return response()->json([
+                'detail' => 'Business name already exists',
+                'code' => 'business_name_already_exists',
+            ], 409);
         }
 
         $business = Business::query()->create([

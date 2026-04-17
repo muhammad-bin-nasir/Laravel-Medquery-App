@@ -119,6 +119,7 @@
 
         <div id="status"></div>
         <div class="hint">This page calls POST /api/auth/login and stores session token in localStorage.</div>
+        <div class="hint"><a href="/register">Need to create admin/user? Open registration page.</a></div>
     </main>
 
     <script>

@@ -48,7 +48,7 @@ class RagController extends Controller
             return response()->json(['detail' => 'Workspace not found'], 404);
         }
 
-        if (!$this->ensureRagAccess($admin, $business->id, $workspace->id)) {
+        if (!$this->ensureRagAccess($admin, $business, $workspace)) {
             return response()->json(['detail' => 'Not allowed'], 403);
         }
 
@@ -87,17 +87,17 @@ class RagController extends Controller
         ]);
     }
 
-    private function ensureRagAccess(User $admin, string $businessId, string $workspaceId): bool
+    private function ensureRagAccess(User $admin, Business $business, Workspace $workspace): bool
     {
         if ($admin->role === 'super_admin') {
             return true;
         }
 
-        if ($admin->role === 'admin' && $admin->business_id === $businessId) {
+        if ($admin->role === 'admin' && $business->admin_id === $admin->id) {
             return true;
         }
 
-        if ($admin->role === 'user' && $admin->business_id === $businessId && $admin->workspace_id === $workspaceId) {
+        if ($admin->role === 'user' && $admin->business_id === $business->id && $admin->workspace_id === $workspace->id) {
             return true;
         }
 

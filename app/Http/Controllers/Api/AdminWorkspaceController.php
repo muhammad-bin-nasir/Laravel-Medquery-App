@@ -38,7 +38,10 @@ class AdminWorkspaceController extends Controller
             ->first();
 
         if ($existing) {
-            return response()->json(['detail' => 'Workspace already exists'], 400);
+            return response()->json([
+                'detail' => 'Workspace already exists',
+                'code' => 'workspace_already_exists',
+            ], 409);
         }
 
         $workspace = DB::transaction(function () use ($business, $payload): Workspace {
