@@ -99,6 +99,20 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        'project_pgsql' => [
+            'driver' => 'pgsql',
+            'host' => env('PROJECT_DB_HOST', '127.0.0.1'),
+            'port' => env('PROJECT_DB_PORT', '5433'),
+            'database' => env('PROJECT_DB_DATABASE', 'medquery'),
+            'username' => env('PROJECT_DB_USERNAME', 'postgres'),
+            'password' => env('PROJECT_DB_PASSWORD', 'postgres'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('PROJECT_DB_SSLMODE', 'prefer'),
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

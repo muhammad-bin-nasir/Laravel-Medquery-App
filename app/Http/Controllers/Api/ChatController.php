@@ -10,7 +10,8 @@ use App\Models\ChatResponse;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceConfig;
-use App\Services\ChatService;
+use App\Services\ProjectApiException;
+use App\Services\ProjectApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
-    public function __construct(private readonly ChatService $chatService)
+    public function __construct(private readonly ProjectApiService $projectApiService)
     {
     }
 
@@ -125,66 +126,60 @@ class ChatController extends Controller
 
     public function generateChat(Request $request): JsonResponse
     {
-        $admin = $this->admin($request);
         $payload = $this->validatedPayload($request);
 
-        [$business, $workspace, $config] = $this->resolveScope($admin, $payload);
+        try {
+            $result = $this->projectApiService->chatGenerate([
+                'business_client_id' => $payload['business_client_id'],
+                'workspace_id' => $payload['workspace_id'],
+                'user_id' => $payload['user_id'],
+                'query' => $payload['query'],
+                'chat_id' => $payload['chat_id'] ?? null,
+                'chat_title' => $payload['chat_title'] ?? null,
+                'prompt_engineering' => $payload['prompt_engineering'] ?? null,
+                'chat_config_override' => $payload['chat_config_override'] ?? null,
+            ]);
 
-        $result = $this->chatService->generateResponse(
-            admin: $admin,
-            businessId: $business->id,
-            workspaceId: $workspace->id,
-            config: $config,
-            payload: $payload,
-        );
+            return response()->json($result);
+        } catch (ProjectApiException $e) {
+            $body = $e->getBody();
 
-        return response()->json([
-            'business_client_id' => $payload['business_client_id'],
-            'workspace_id' => $payload['workspace_id'],
-            'user_id' => $admin->email,
-            'query' => $payload['query'],
-            'answer' => $result['answer'],
-            'sources' => $result['sources'],
-            'usage' => $result['usage'],
-        ]);
+            if (is_array($body)) {
+                return response()->json($body, $e->getStatus());
+            }
+
+            return response()->json([
+                'detail' => $e->getMessage(),
+            ], $e->getStatus());
+        }
     }
 
     public function streamChat(Request $request): StreamedResponse|JsonResponse
     {
-        $admin = $this->admin($request);
         $payload = $this->validatedPayload($request);
 
-        [$business, $workspace, $config] = $this->resolveScope($admin, $payload);
+        try {
+            return $this->projectApiService->streamChat([
+                'business_client_id' => $payload['business_client_id'],
+                'workspace_id' => $payload['workspace_id'],
+                'user_id' => $payload['user_id'],
+                'query' => $payload['query'],
+                'chat_id' => $payload['chat_id'] ?? null,
+                'chat_title' => $payload['chat_title'] ?? null,
+                'prompt_engineering' => $payload['prompt_engineering'] ?? null,
+                'chat_config_override' => $payload['chat_config_override'] ?? null,
+            ]);
+        } catch (ProjectApiException $e) {
+            $body = $e->getBody();
 
-        $result = $this->chatService->generateResponse(
-            admin: $admin,
-            businessId: $business->id,
-            workspaceId: $workspace->id,
-            config: $config,
-            payload: $payload,
-        );
-
-        return response()->stream(function () use ($result): void {
-            echo 'data: '.json_encode(['type' => 'start'], JSON_UNESCAPED_UNICODE)."\n\n";
-            @ob_flush();
-            flush();
-
-            foreach (preg_split('/(\s+)/u', $result['answer'], -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) as $piece) {
-                echo 'data: '.json_encode(['token' => $piece], JSON_UNESCAPED_UNICODE)."\n\n";
-                @ob_flush();
-                flush();
-                usleep(20000);
+            if (is_array($body)) {
+                return response()->json($body, $e->getStatus());
             }
 
-            echo 'data: '.json_encode(['type' => 'done', 'sources' => $result['sources'], 'usage' => $result['usage']], JSON_UNESCAPED_UNICODE)."\n\n";
-            @ob_flush();
-            flush();
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'Connection' => 'keep-alive',
-            'X-Accel-Buffering' => 'no',
-        ]);
+            return response()->json([
+                'detail' => $e->getMessage(),
+            ], $e->getStatus());
+        }
     }
 
     public function testStream(): StreamedResponse

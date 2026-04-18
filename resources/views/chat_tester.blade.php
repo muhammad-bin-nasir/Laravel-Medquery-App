@@ -198,23 +198,22 @@
             }
 
             const businessClientId = (defaults.business_client_id || 'acme').toString().trim();
-            let workspaceId = (defaults.workspace_id || '').toString().trim();
+            let workspaceId = (defaults.workspace_id || 'main').toString().trim();
 
-            // Keep the local scope aligned with current seeded demo data.
-            if (!workspaceId || (businessClientId === 'acme' && workspaceId === 'main')) {
-                workspaceId = 'test';
+            if (!workspaceId || (businessClientId === 'acme' && workspaceId === 'test')) {
+                workspaceId = 'main';
             }
 
             localStorage.setItem('api_chat_defaults', JSON.stringify({
                 business_client_id: businessClientId,
                 workspace_id: workspaceId,
-                user_id: (defaults.user_id || user.email || 'admin@acme.test').toString().trim(),
+                user_id: (defaults.user_id || user.email || 'admin@admin.com').toString().trim(),
             }));
 
             return {
                 business_client_id: businessClientId,
                 workspace_id: workspaceId,
-                user_id: (defaults.user_id || user.email || 'admin@acme.test').toString().trim(),
+                user_id: (defaults.user_id || user.email || 'admin@admin.com').toString().trim(),
                 query: queryEl.value.trim(),
             };
         }

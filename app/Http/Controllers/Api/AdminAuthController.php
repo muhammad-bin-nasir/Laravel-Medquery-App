@@ -9,7 +9,11 @@ use App\Models\Workspace;
 use App\Services\JwtTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use RuntimeException;
+use Throwable;
 
 class AdminAuthController extends Controller
 {
@@ -17,6 +21,9 @@ class AdminAuthController extends Controller
     {
     }
 
+    /**
+     * Authenticate an admin or user and return an access token with any resolved scope.
+     */
     public function login(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -78,6 +85,9 @@ class AdminAuthController extends Controller
         ]);
     }
 
+    /**
+     * Create a new admin account in the Laravel application.
+     */
     public function createAdmin(Request $request): JsonResponse
     {
         $payload = $request->validate([
@@ -107,10 +117,15 @@ class AdminAuthController extends Controller
         return response()->json(['status' => 'created']);
     }
 
+    /**
+     * Create a workspace user in Laravel and sync the same account to the FastAPI database.
+     */
     public function createUser(Request $request): JsonResponse
     {
         $payload = $request->validate([
-            'email' => ['required', 'email'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'username' => ['nullable', 'email', 'required_without:email'],
+            'email' => ['nullable', 'email', 'required_without:username'],
             'password' => ['required', 'string', 'min:6'],
             'business_client_id' => ['required', 'string', 'max:100'],
             'workspace_id' => ['required', 'string', 'max:100'],
@@ -140,7 +155,8 @@ class AdminAuthController extends Controller
             return response()->json(['detail' => 'Workspace not found'], 404);
         }
 
-        $emailNormalized = $this->normalizeEmail($payload['email']);
+        $emailInput = (string) ($payload['username'] ?? $payload['email'] ?? '');
+        $emailNormalized = $this->normalizeEmail($emailInput);
 
         $existing = User::query()
             ->where('business_id', $business->id)
@@ -154,16 +170,93 @@ class AdminAuthController extends Controller
             ], 409);
         }
 
-        User::query()->create([
-            'email' => $emailNormalized,
-            'email_normalized' => $emailNormalized,
-            'password_hash' => Hash::make($payload['password']),
-            'role' => 'user',
-            'business_id' => $business->id,
-            'workspace_id' => $workspace->id,
-        ]);
+        try {
+            $user = DB::transaction(function () use ($business, $workspace, $emailNormalized, $payload): User {
+                $user = User::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'email' => $emailNormalized,
+                    'email_normalized' => $emailNormalized,
+                    'password_hash' => Hash::make($payload['password']),
+                    'role' => 'user',
+                    'business_id' => $business->id,
+                    'workspace_id' => $workspace->id,
+                ]);
 
-        return response()->json(['status' => 'created']);
+                $this->syncUserToFastApi($user, $business, $workspace);
+
+                return $user;
+            });
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => $e instanceof RuntimeException ? $e->getMessage() : 'Unable to create user',
+                'code' => 'user_sync_failed',
+            ], 500);
+        }
+
+        return response()->json([
+            'status' => 'created',
+            'role' => $user->role,
+            'email' => $user->email,
+        ]);
+    }
+
+    private function syncUserToFastApi(User $user, Business $business, Workspace $workspace): void
+    {
+        $project = DB::connection('project_pgsql');
+        $project->getPdo();
+
+        $projectBusiness = $project->table('businesses')
+            ->where('business_client_id', $business->business_client_id)
+            ->first();
+
+        if (!$projectBusiness) {
+            $project->table('businesses')->insert([
+                'id' => $business->id,
+                'business_client_id' => $business->business_client_id,
+                'admin_id' => null,
+                'name' => $business->name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $projectBusiness = (object) ['id' => $business->id];
+        }
+
+        $projectWorkspace = $project->table('workspaces')
+            ->where('business_id', $projectBusiness->id)
+            ->where('workspace_id', $workspace->workspace_id)
+            ->first();
+
+        if (!$projectWorkspace) {
+            $project->table('workspaces')->insert([
+                'id' => $workspace->id,
+                'business_id' => $projectBusiness->id,
+                'workspace_id' => $workspace->workspace_id,
+                'name' => $workspace->name,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $projectWorkspace = (object) ['id' => $workspace->id];
+        }
+
+        $project->table('users')->updateOrInsert(
+            [
+                'business_id' => $projectBusiness->id,
+                'email_normalized' => $user->email_normalized,
+            ],
+            [
+                'id' => $user->id,
+                'workspace_id' => $projectWorkspace->id,
+                'email' => $user->email,
+                'password_hash' => $user->password_hash,
+                'role' => 'user',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
     }
 
     private function normalizeEmail(string $email): string

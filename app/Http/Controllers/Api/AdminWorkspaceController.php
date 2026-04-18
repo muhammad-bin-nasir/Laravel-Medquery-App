@@ -7,12 +7,18 @@ use App\Models\Business;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceConfig;
+use App\Services\ProjectApiException;
+use App\Services\ProjectApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminWorkspaceController extends Controller
 {
+    public function __construct(private readonly ProjectApiService $projectApiService)
+    {
+    }
+
     public function create(Request $request, string $business_client_id): JsonResponse
     {
         /** @var User $admin */
@@ -42,6 +48,20 @@ class AdminWorkspaceController extends Controller
                 'detail' => 'Workspace already exists',
                 'code' => 'workspace_already_exists',
             ], 409);
+        }
+
+        try {
+            $this->projectApiService->createWorkspace($business->business_client_id, [
+                'workspace_id' => $payload['workspace_id'],
+                'name' => $payload['name'],
+            ]);
+        } catch (ProjectApiException $e) {
+            if ($e->getStatus() !== 409) {
+                return response()->json([
+                    'detail' => 'Failed to sync workspace to Project backend',
+                    'errors' => $e->getBody() ?? $e->getMessage(),
+                ], 500);
+            }
         }
 
         $workspace = DB::transaction(function () use ($business, $payload): Workspace {

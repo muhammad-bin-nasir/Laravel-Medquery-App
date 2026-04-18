@@ -18,17 +18,8 @@ class ChatApiTestSeeder extends Seeder
 {
     public function run(): void
     {
-        User::query()->firstOrCreate(
-            ['email_normalized' => 'superadmin@system.local'],
-            [
-                'id' => (string) Str::uuid(),
-                'business_id' => null,
-                'workspace_id' => null,
-                'email' => 'superadmin@system.local',
-                'password_hash' => Hash::make('SuperAdmin@12345'),
-                'role' => 'super_admin',
-            ]
-        );
+        // Remove all existing users and keep only one fixed admin account.
+        User::query()->delete();
 
         $business = Business::query()->firstOrCreate(
             ['business_client_id' => 'acme'],
@@ -50,13 +41,13 @@ class ChatApiTestSeeder extends Seeder
         );
 
         $admin = User::query()->firstOrCreate(
-            ['email_normalized' => 'admin@acme.test'],
+            ['email_normalized' => 'admin@admin.com'],
             [
                 'id' => (string) Str::uuid(),
                 'business_id' => null,
                 'workspace_id' => null,
-                'email' => 'admin@acme.test',
-                'password_hash' => Hash::make('Admin@12345'),
+                'email' => 'admin@admin.com',
+                'password_hash' => Hash::make('admin@12345'),
                 'role' => 'admin',
             ]
         );

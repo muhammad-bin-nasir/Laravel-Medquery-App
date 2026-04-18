@@ -9,8 +9,10 @@ Route::get('/', function () {
 
 Route::view('/login', 'api_login')->name('api.login');
 Route::view('/register', 'register_dual')->name('register');
+Route::view('/create-user', 'create_user')->name('create.user');
 Route::view('/test', 'api_tester')->name('api.tester');
 Route::view('/chat', 'chat_tester')->name('chat.tester');
+Route::redirect('/docs', '/docs/api');
 Route::redirect('/api', '/test');
 Route::redirect('/db', '/test#db-browser');
 

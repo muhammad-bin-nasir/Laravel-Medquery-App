@@ -12,6 +12,7 @@
         "smalot/pdfparser": "^2.12"
     },
     "require-dev": {
+        "dedoc/scramble": "^0.13.20",
         "fakerphp/faker": "^1.23",
         "laravel/pail": "^1.2.5",
         "laravel/pint": "^1.27",
