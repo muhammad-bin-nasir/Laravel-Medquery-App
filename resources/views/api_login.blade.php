@@ -160,14 +160,11 @@
 
                 const data = await response.json().catch(() => ({}));
 
-                const token = extractToken(data.session) || extractToken(data.access_token) || extractToken(data.token);
-
-                if (!response.ok || !token) {
+                if (!response.ok) {
                     const detail = data.detail || 'Login failed';
                     throw new Error(detail);
                 }
 
-                localStorage.setItem('api_token', token);
                 localStorage.setItem('api_session', JSON.stringify(data.session || null));
                 localStorage.setItem('api_user', JSON.stringify(data.user || null));
                 localStorage.setItem('api_chat_defaults', JSON.stringify({

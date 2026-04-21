@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('chat_model_default', 255)->default('gpt-4.1-mini');
             $table->float('chat_temperature_default')->default(0.2);
             $table->integer('chat_max_tokens_default')->default(600);
-            $table->text('prompt_engineering')->default('You are a medical assistant. Provide concise answers based on the context.');
+            $table->text('prompt_engineering');
             $table->timestamps();
 
             $table->unique(['business_id', 'workspace_id'], 'uq_config_workspace');

@@ -187,15 +187,9 @@
 
             <article class="card">
                 <h2>User Registration (Admin Only)</h2>
-                <p>Requires admin/super_admin bearer token and scoped business/workspace.</p>
+                <p>Uses the first available admin account and the scoped business/workspace you select.</p>
 
                 <form id="userRegisterForm">
-                    <div class="row">
-                        <label for="adminToken">Admin Bearer Token</label>
-                        <textarea id="adminToken" placeholder="Paste admin token (or use saved api_token)"></textarea>
-                        <div class="hint">If blank, page will use localStorage api_token.</div>
-                    </div>
-
                     <div class="actions">
                         <button id="loadScopesBtn" class="secondary" type="button">Load Businesses and Workspaces</button>
                     </div>
@@ -241,7 +235,6 @@
         const adminStatus = document.getElementById('adminStatus');
         const userStatus = document.getElementById('userStatus');
 
-        const tokenEl = document.getElementById('adminToken');
         const loadScopesBtn = document.getElementById('loadScopesBtn');
         const businessClientIdEl = document.getElementById('businessClientId');
         const workspaceIdEl = document.getElementById('workspaceId');
@@ -251,27 +244,7 @@
             el.className = ok ? 'status ok' : 'status err';
         }
 
-        function extractToken(value) {
-            if (typeof value === 'string') {
-                return value.trim();
-            }
-
-            if (value && typeof value === 'object') {
-                if (typeof value.access_token === 'string') {
-                    return value.access_token.trim();
-                }
-                if (typeof value.token === 'string') {
-                    return value.token.trim();
-                }
-            }
-
-            return '';
-        }
-
         function seedDefaults() {
-            const token = localStorage.getItem('api_token') || '';
-            tokenEl.value = token;
-
             const defaultsRaw = localStorage.getItem('api_chat_defaults');
             if (defaultsRaw) {
                 try {
@@ -286,10 +259,6 @@
                     // Ignore malformed localStorage payload.
                 }
             }
-        }
-
-        function getAdminToken() {
-            return extractToken(tokenEl.value) || extractToken(localStorage.getItem('api_token') || '');
         }
 
         function setBusinessOptions(items, selectedValue = '') {
@@ -333,16 +302,10 @@
         }
 
         async function loadBusinesses() {
-            const token = getAdminToken();
-            if (!token) {
-                throw new Error('Admin token is required to load businesses.');
-            }
-
             const response = await fetch('/api/admin/businesses', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
             });
 
@@ -368,7 +331,6 @@
         }
 
         async function loadWorkspacesForSelectedBusiness() {
-            const token = getAdminToken();
             const businessClientId = businessClientIdEl.value.trim();
 
             if (!businessClientId) {
@@ -376,15 +338,10 @@
                 return [];
             }
 
-            if (!token) {
-                throw new Error('Admin token is required to load workspaces.');
-            }
-
             const response = await fetch('/api/admin/businesses/' + encodeURIComponent(businessClientId) + '/workspaces', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
             });
 
@@ -444,12 +401,6 @@
             const password = document.getElementById('userPassword').value;
             const business_client_id = businessClientIdEl.value.trim();
             const workspace_id = workspaceIdEl.value.trim();
-            const token = getAdminToken();
-
-            if (!token) {
-                setStatus(userStatus, 'Admin token is required to create user.', false);
-                return;
-            }
 
             try {
                 const response = await fetch('/api/admin/auth/create-user', {
@@ -457,7 +408,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
-                        'Authorization': 'Bearer ' + token,
                     },
                     body: JSON.stringify({
                         email,
@@ -472,7 +422,6 @@
                     throw new Error(data.detail || 'Unable to create user');
                 }
 
-                localStorage.setItem('api_token', token);
                 localStorage.setItem('api_chat_defaults', JSON.stringify({
                     business_client_id,
                     workspace_id,
@@ -507,13 +456,11 @@
 
         seedDefaults();
 
-        if (getAdminToken()) {
-            loadBusinesses()
-                .then(() => loadWorkspacesForSelectedBusiness())
-                .catch(() => {
-                    setStatus(userStatus, 'Could not auto-load options. Click Load Businesses and Workspaces.', false);
-                });
-        }
+        loadBusinesses()
+            .then(() => loadWorkspacesForSelectedBusiness())
+            .catch(() => {
+                setStatus(userStatus, 'Could not auto-load options. Click Load Businesses and Workspaces.', false);
+            });
     </script>
 </body>
 </html>

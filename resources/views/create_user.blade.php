@@ -141,7 +141,7 @@
     <main class="wrap">
         <section class="card">
             <h1>Create User</h1>
-            <p>This page only works for a currently logged-in admin. New accounts are created with the user role in both Laravel and FastAPI databases.</p>
+            <p>This page creates user-role accounts in both Laravel and FastAPI databases.</p>
             <div class="actions">
                 <a href="/login"><button class="secondary" type="button">Go to Login</button></a>
                 <a href="/chat"><button class="secondary" type="button">Go to Chat</button></a>
@@ -186,7 +186,7 @@
             </form>
 
             <div id="formStatus" class="status"></div>
-            <div class="hint">If no valid admin is logged in, this page redirects to the login screen.</div>
+            <div class="hint">The first available admin account is used automatically.</div>
         </section>
     </main>
 
@@ -206,10 +206,6 @@
             el.className = 'status ' + type;
         }
 
-        function getToken() {
-            return (localStorage.getItem('api_token') || '').trim();
-        }
-
         function setFormEnabled(enabled) {
             businessSelect.disabled = !enabled;
             workspaceSelect.disabled = !enabled;
@@ -220,41 +216,28 @@
         }
 
         async function checkAdminSession() {
-            const token = getToken();
-            if (!token) {
-                setStatus(authStatus, 'No admin is logged in. Redirecting to login...', 'err');
-                setFormEnabled(false);
-                setTimeout(() => { window.location.href = '/login'; }, 1200);
-                return false;
-            }
-
             const response = await fetch('/api/auth/me', {
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
             });
 
             const data = await response.json().catch(() => ({}));
             if (!response.ok || !data.role || !['admin', 'super_admin'].includes(data.role)) {
-                localStorage.removeItem('api_token');
-                setStatus(authStatus, 'Admin login required. Redirecting to login...', 'err');
+                setStatus(authStatus, 'Admin account not available.', 'err');
                 setFormEnabled(false);
-                setTimeout(() => { window.location.href = '/login'; }, 1200);
                 return false;
             }
 
-            setStatus(authStatus, 'Admin session verified. You can create a new user now.', 'ok');
+            setStatus(authStatus, 'Admin access verified. You can create a new user now.', 'ok');
             setFormEnabled(true);
             return true;
         }
 
         async function loadBusinesses() {
-            const token = getToken();
             const response = await fetch('/api/admin/businesses', {
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
             });
 
@@ -278,7 +261,6 @@
         }
 
         async function loadWorkspaces() {
-            const token = getToken();
             const businessId = businessSelect.value;
 
             workspaceSelect.innerHTML = '<option value="">Select workspace</option>';
@@ -289,7 +271,6 @@
             const response = await fetch('/api/admin/businesses/' + encodeURIComponent(businessId) + '/workspaces', {
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
             });
 
@@ -323,19 +304,12 @@
             formStatus.className = 'status';
             formStatus.style.display = 'none';
 
-            const token = getToken();
-            if (!token) {
-                setStatus(formStatus, 'Admin login required.', 'err');
-                return;
-            }
-
             try {
                 const response = await fetch('/api/admin/auth/create-user', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
-                        'Authorization': 'Bearer ' + token,
                     },
                     body: JSON.stringify({
                         name: nameInput.value.trim(),

@@ -219,17 +219,11 @@
         }
 
         async function callApi(url, body) {
-            const token = (localStorage.getItem('api_token') || '').trim();
-            if (!token) {
-                throw new Error('Token is missing. Login first at /login.');
-            }
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
                 body: JSON.stringify(body),
             });

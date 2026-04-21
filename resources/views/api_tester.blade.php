@@ -278,11 +278,6 @@
             <p>Pick an API button, edit only the required fields, and run.</p>
 
             <div class="row">
-                <label for="token">Token</label>
-                <textarea id="token" class="token" placeholder="No token yet"></textarea>
-            </div>
-
-            <div class="row">
                 <label for="chatBusiness">Chat business_client_id</label>
                 <input id="chatBusiness" type="text" value="acme">
             </div>
@@ -298,11 +293,9 @@
             </div>
 
             <div class="actions">
-                <button class="btn-secondary" id="saveTokenBtn" type="button">Save Token</button>
-                <button class="btn-secondary" id="clearTokenBtn" type="button">Clear Token</button>
                 <a href="/login"><button class="btn-secondary" type="button">Back to Login</button></a>
             </div>
-            <div class="small">Token stored as api_token. Chat defaults stored as api_chat_defaults.</div>
+            <div class="small">Chat defaults are stored as api_chat_defaults.</div>
         </section>
 
         <section class="card">
@@ -323,7 +316,7 @@
 
         <section id="chat-tester" class="card">
             <h2>Chat Tester</h2>
-            <p>Single-click chat test using saved token and default business/workspace/user.</p>
+            <p>Single-click chat test using default business, workspace, and user.</p>
 
             <div class="row">
                 <label for="chatPrompt">Prompt</label>
@@ -376,13 +369,9 @@
     </div>
 
     <script>
-        const tokenEl = document.getElementById('token');
         const chatBusinessEl = document.getElementById('chatBusiness');
         const chatWorkspaceEl = document.getElementById('chatWorkspace');
         const chatUserEl = document.getElementById('chatUser');
-
-        const saveTokenBtn = document.getElementById('saveTokenBtn');
-        const clearTokenBtn = document.getElementById('clearTokenBtn');
 
         const endpointButtonsEl = document.getElementById('endpointButtons');
         const endpointMetaEl = document.getElementById('endpointMeta');
@@ -967,47 +956,7 @@
             return JSON.stringify({ status, headers, body }, null, 2);
         }
 
-        function extractToken(value) {
-            if (typeof value === 'string') {
-                const token = value.trim();
-                if (token && token !== '[object Object]') {
-                    return token;
-                }
-                return '';
-            }
-
-            if (value && typeof value === 'object') {
-                if (typeof value.access_token === 'string') {
-                    return value.access_token.trim();
-                }
-                if (typeof value.token === 'string') {
-                    return value.token.trim();
-                }
-            }
-
-            return '';
-        }
-
         function restoreStoredData() {
-            const rawToken = localStorage.getItem('api_token');
-            let token = extractToken(rawToken || '');
-
-            if (!token) {
-                const sessionRaw = localStorage.getItem('api_session');
-                if (sessionRaw) {
-                    try {
-                        token = extractToken(JSON.parse(sessionRaw));
-                    } catch (error) {
-                        // Ignore invalid legacy session payload.
-                    }
-                }
-            }
-
-            tokenEl.value = token;
-            if (token) {
-                localStorage.setItem('api_token', token);
-            }
-
             const userRaw = localStorage.getItem('api_user');
             if (userRaw) {
                 try {
@@ -1135,17 +1084,7 @@
         }
 
         async function sendRequest() {
-            const token = extractToken(tokenEl.value);
             const values = collectFieldValues();
-
-            if (token && token !== tokenEl.value.trim()) {
-                tokenEl.value = token;
-            }
-
-            if (activeEndpoint.useAuth && !token) {
-                setStatus('Token missing. Login first or paste token.', false);
-                return;
-            }
 
             if (activeEndpoint.key === 'chatGenerate' || activeEndpoint.key === 'chatStream') {
                 if (!values.query) {
@@ -1282,9 +1221,6 @@
                 : activeEndpoint.endpoint;
 
             const headers = { 'Accept': 'application/json' };
-            if (activeEndpoint.useAuth) {
-                headers.Authorization = 'Bearer ' + token;
-            }
 
             let body;
             if (activeEndpoint.buildFormData) {
@@ -1320,14 +1256,6 @@
                     // Keep plain text body for non-json responses.
                 }
 
-                if (response.ok && activeEndpoint.key === 'adminAuthLogin' && parsedBody && typeof parsedBody === 'object') {
-                    const freshToken = extractToken(parsedBody.access_token || parsedBody.session || parsedBody.token);
-                    if (freshToken) {
-                        tokenEl.value = freshToken;
-                        localStorage.setItem('api_token', freshToken);
-                    }
-                }
-
                 const responseHeaders = {};
                 response.headers.forEach((value, key) => {
                     responseHeaders[key] = value;
@@ -1341,27 +1269,7 @@
             }
         }
 
-        saveTokenBtn.addEventListener('click', () => {
-            const token = extractToken(tokenEl.value);
-            tokenEl.value = token;
-            localStorage.setItem('api_token', token);
-            storeDefaults();
-            setStatus('Token and defaults saved.', true);
-        });
-
-        clearTokenBtn.addEventListener('click', () => {
-            localStorage.removeItem('api_token');
-            tokenEl.value = '';
-            setStatus('Token removed.', true);
-        });
-
         chatAskBtn.addEventListener('click', async () => {
-            const token = extractToken(tokenEl.value);
-            if (!token) {
-                setChatStatus('Token missing. Login first or paste token.', false);
-                return;
-            }
-
             const payload = {
                 business_client_id: chatBusinessEl.value.trim(),
                 workspace_id: chatWorkspaceEl.value.trim(),
@@ -1380,7 +1288,6 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
-                        'Authorization': 'Bearer ' + token,
                     },
                     body: JSON.stringify(payload),
                 });
