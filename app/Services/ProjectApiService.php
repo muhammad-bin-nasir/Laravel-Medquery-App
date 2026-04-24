@@ -79,6 +79,18 @@ class ProjectApiService
         return $this->handleResponse($response, '/chat/generate');
     }
 
+    public function createUser(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/create-user', $payload);
+        return $this->handleResponse($response, '/admin/auth/create-user');
+    }
+
+    public function createAdmin(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/create-admin', $payload);
+        return $this->handleResponse($response, '/admin/auth/create-admin');
+    }
+
     public function streamChat(array $payload): StreamedResponse
     {
         $response = $this->client()

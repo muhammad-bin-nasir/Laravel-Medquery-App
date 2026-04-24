@@ -25,6 +25,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'id',
+        'external_id',
         'business_id',
         'workspace_id',
         'email',
@@ -40,6 +41,7 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'external_id' => 'string',
             'business_id' => 'string',
             'workspace_id' => 'string',
         ];

@@ -7,17 +7,21 @@ use App\Models\Business;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\JwtTokenService;
+use App\Services\ProjectApiException;
+use App\Services\ProjectApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
 class AdminAuthController extends Controller
 {
-    public function __construct(private readonly JwtTokenService $jwtTokenService)
+    public function __construct(
+        private readonly JwtTokenService $jwtTokenService,
+        private readonly ProjectApiService $projectApiService,
+    )
     {
     }
 
@@ -86,7 +90,7 @@ class AdminAuthController extends Controller
     }
 
     /**
-     * Create a new admin account in the Laravel application.
+     * Create a new admin account in FastAPI first, then persist the linked Laravel copy.
      */
     public function createAdmin(Request $request): JsonResponse
     {
@@ -105,20 +109,47 @@ class AdminAuthController extends Controller
             ], 409);
         }
 
-        User::query()->create([
-            'email' => $emailNormalized,
-            'email_normalized' => $emailNormalized,
-            'password_hash' => Hash::make($payload['password']),
-            'role' => 'admin',
-            'business_id' => null,
-            'workspace_id' => null,
-        ]);
+        $passwordHash = Hash::make($payload['password']);
 
-        return response()->json(['status' => 'created']);
+        try {
+            $projectAdmin = $this->projectApiService->createAdmin([
+                'email' => $emailNormalized,
+                'password' => $payload['password'],
+            ]);
+
+            $externalId = (string) ($projectAdmin['user_id'] ?? '');
+            if ($externalId === '') {
+                throw new RuntimeException('Project API create-admin did not return a user_id');
+            }
+
+            $admin = User::query()->create([
+                'external_id' => $externalId,
+                'email' => $emailNormalized,
+                'email_normalized' => $emailNormalized,
+                'password_hash' => $passwordHash,
+                'role' => 'admin',
+                'business_id' => null,
+                'workspace_id' => null,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => $this->resolveCreateUserError($e),
+                'code' => 'admin_sync_failed',
+            ], $this->resolveCreateUserStatus($e));
+        }
+
+        return response()->json([
+            'status' => 'created',
+            'role' => $admin->role,
+            'email' => $admin->email,
+            'external_id' => $admin->external_id,
+        ]);
     }
 
     /**
-     * Create a workspace user in Laravel and sync the same account to the FastAPI database.
+     * Create a workspace user in FastAPI first, then persist the linked Laravel copy.
      */
     public function createUser(Request $request): JsonResponse
     {
@@ -170,93 +201,74 @@ class AdminAuthController extends Controller
             ], 409);
         }
 
+        $passwordHash = Hash::make($payload['password']);
+
         try {
-            $user = DB::transaction(function () use ($business, $workspace, $emailNormalized, $payload): User {
-                $user = User::query()->create([
-                    'id' => (string) Str::uuid(),
+            $projectUser = $this->projectApiService->createUser([
+                'email' => $emailNormalized,
+                'password' => $payload['password'],
+                'business_client_id' => $business->business_client_id,
+                'workspace_id' => $workspace->workspace_id,
+            ]);
+
+            $externalId = (string) ($projectUser['user_id'] ?? '');
+            if ($externalId === '') {
+                throw new RuntimeException('Project API create-user did not return a user_id');
+            }
+
+            $user = DB::transaction(function () use ($business, $workspace, $emailNormalized, $passwordHash, $externalId): User {
+                return User::query()->create([
+                    'external_id' => $externalId,
                     'email' => $emailNormalized,
                     'email_normalized' => $emailNormalized,
-                    'password_hash' => Hash::make($payload['password']),
+                    'password_hash' => $passwordHash,
                     'role' => 'user',
                     'business_id' => $business->id,
                     'workspace_id' => $workspace->id,
                 ]);
-
-                $this->syncUserToFastApi($user, $business, $workspace);
-
-                return $user;
             });
         } catch (Throwable $e) {
             report($e);
 
             return response()->json([
-                'detail' => $e instanceof RuntimeException ? $e->getMessage() : 'Unable to create user',
+                'detail' => $this->resolveCreateUserError($e),
                 'code' => 'user_sync_failed',
-            ], 500);
+            ], $this->resolveCreateUserStatus($e));
         }
 
         return response()->json([
             'status' => 'created',
             'role' => $user->role,
             'email' => $user->email,
+            'external_id' => $user->external_id,
         ]);
     }
 
-    private function syncUserToFastApi(User $user, Business $business, Workspace $workspace): void
+    private function resolveCreateUserError(Throwable $e): string
     {
-        $project = DB::connection('project_pgsql');
-        $project->getPdo();
+        if ($e instanceof ProjectApiException) {
+            $body = $e->getBody();
+            if (is_array($body) && isset($body['detail']) && is_string($body['detail'])) {
+                return $body['detail'];
+            }
 
-        $projectBusiness = $project->table('businesses')
-            ->where('business_client_id', $business->business_client_id)
-            ->first();
-
-        if (!$projectBusiness) {
-            $project->table('businesses')->insert([
-                'id' => $business->id,
-                'business_client_id' => $business->business_client_id,
-                'admin_id' => null,
-                'name' => $business->name,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $projectBusiness = (object) ['id' => $business->id];
+            return $e->getMessage();
         }
 
-        $projectWorkspace = $project->table('workspaces')
-            ->where('business_id', $projectBusiness->id)
-            ->where('workspace_id', $workspace->workspace_id)
-            ->first();
-
-        if (!$projectWorkspace) {
-            $project->table('workspaces')->insert([
-                'id' => $workspace->id,
-                'business_id' => $projectBusiness->id,
-                'workspace_id' => $workspace->workspace_id,
-                'name' => $workspace->name,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            $projectWorkspace = (object) ['id' => $workspace->id];
+        if ($e instanceof RuntimeException) {
+            return $e->getMessage();
         }
 
-        $project->table('users')->updateOrInsert(
-            [
-                'business_id' => $projectBusiness->id,
-                'email_normalized' => $user->email_normalized,
-            ],
-            [
-                'id' => $user->id,
-                'workspace_id' => $projectWorkspace->id,
-                'email' => $user->email,
-                'password_hash' => $user->password_hash,
-                'role' => 'user',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
+        return 'Unable to create user';
+    }
+
+    private function resolveCreateUserStatus(Throwable $e): int
+    {
+        if ($e instanceof ProjectApiException) {
+            return $e->getStatus();
+        }
+
+        return 500;
     }
 
     private function normalizeEmail(string $email): string

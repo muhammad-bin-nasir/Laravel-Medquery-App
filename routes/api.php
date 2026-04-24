@@ -23,7 +23,13 @@ Route::post('aadmin/auth/login', [AdminAuthController::class, 'login']);
 
 Route::prefix('admin/system-config')->middleware(['admin.auth'])->group(function (): void {
     Route::get('/openai-api-key', [AdminSystemConfigController::class, 'getOpenAiApiKeyStatus']);
+    Route::get('/project-api', [AdminSystemConfigController::class, 'getProjectApiStatus']);
+    Route::get('/runtime', [AdminSystemConfigController::class, 'getRuntimeStatus']);
+    Route::get('/database', [AdminSystemConfigController::class, 'getDatabaseStatus']);
+    Route::get('/auth-mode', [AdminSystemConfigController::class, 'getAuthModeStatus']);
+    Route::get('/storage', [AdminSystemConfigController::class, 'getStorageStatus']);
     Route::put('/openai-api-key', [AdminSystemConfigController::class, 'updateOpenAiApiKey']);
+    Route::delete('/openai-api-key', [AdminSystemConfigController::class, 'clearOpenAiApiKeyOverride']);
 });
 
 Route::prefix('admin/businesses')->middleware(['admin.auth'])->group(function (): void {
