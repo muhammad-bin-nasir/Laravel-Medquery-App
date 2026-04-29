@@ -35,17 +35,30 @@ class ProjectApiException extends RuntimeException
 class ProjectApiService
 {
     private string $baseUrl;
+    private ?string $token = null;
 
     public function __construct()
     {
         $this->baseUrl = rtrim(config('services.project.base_url', 'http://127.0.0.1:8000/api'), '/');
     }
 
+    public function withToken(?string $token): self
+    {
+        $this->token = $token;
+        return $this;
+    }
+
     private function client(): PendingRequest
     {
-        return Http::baseUrl($this->baseUrl)
+        $client = Http::baseUrl($this->baseUrl)
             ->acceptJson()
             ->timeout(120);
+
+        if ($this->token) {
+            $client = $client->withToken($this->token);
+        }
+
+        return $client;
     }
 
     private function handleResponse(Response $response, string $endpoint): array
@@ -89,6 +102,18 @@ class ProjectApiService
     {
         $response = $this->client()->post('/admin/auth/create-admin', $payload);
         return $this->handleResponse($response, '/admin/auth/create-admin');
+    }
+
+    public function createBusiness(array $payload): array
+    {
+        $response = $this->client()->post('/admin/businesses', $payload);
+        return $this->handleResponse($response, '/admin/businesses');
+    }
+
+    public function createWorkspace(string $business_client_id, array $payload): array
+    {
+        $response = $this->client()->post("/admin/businesses/{$business_client_id}/workspaces", $payload);
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces");
     }
 
     public function streamChat(array $payload): StreamedResponse

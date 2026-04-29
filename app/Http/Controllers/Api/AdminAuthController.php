@@ -204,7 +204,8 @@ class AdminAuthController extends Controller
         $passwordHash = Hash::make($payload['password']);
 
         try {
-            $projectUser = $this->projectApiService->createUser([
+            $jwtToken = app(JwtTokenService::class)->createForUser($admin)['access_token'];
+            $projectUser = app(ProjectApiService::class)->withToken($jwtToken)->createUser([
                 'email' => $emailNormalized,
                 'password' => $payload['password'],
                 'business_client_id' => $business->business_client_id,

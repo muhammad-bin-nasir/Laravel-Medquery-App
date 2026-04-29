@@ -45,6 +45,21 @@ class AdminBusinessController extends Controller
             ], 409);
         }
 
+        try {
+            $jwtToken = app(\App\Services\JwtTokenService::class)->createForUser($admin)['access_token'];
+            app(\App\Services\ProjectApiService::class)->withToken($jwtToken)->createBusiness([
+                'business_client_id' => $payload['business_client_id'],
+                'name' => $payload['name'],
+            ]);
+        } catch (\App\Services\ProjectApiException $e) {
+            if ($e->getStatus() !== 409) {
+                return response()->json([
+                    'detail' => 'Failed to sync business to Project backend',
+                    'errors' => $e->getBody() ?? $e->getMessage(),
+                ], 500);
+            }
+        }
+
         $business = Business::query()->create([
             'business_client_id' => $payload['business_client_id'],
             'name' => $payload['name'],

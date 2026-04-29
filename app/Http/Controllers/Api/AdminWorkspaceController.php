@@ -51,7 +51,8 @@ class AdminWorkspaceController extends Controller
         }
 
         try {
-            $this->projectApiService->createWorkspace($business->business_client_id, [
+            $jwtToken = app(\App\Services\JwtTokenService::class)->createForUser($admin)['access_token'];
+            app(\App\Services\ProjectApiService::class)->withToken($jwtToken)->createWorkspace($business->business_client_id, [
                 'workspace_id' => $payload['workspace_id'],
                 'name' => $payload['name'],
             ]);
@@ -62,6 +63,7 @@ class AdminWorkspaceController extends Controller
                     'errors' => $e->getBody() ?? $e->getMessage(),
                 ], 500);
             }
+            // If 409 (already exists on FastAPI side), continue to create locally if not present
         }
 
         $workspace = DB::transaction(function () use ($business, $payload): Workspace {
