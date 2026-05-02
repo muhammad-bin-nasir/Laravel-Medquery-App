@@ -9,7 +9,7 @@ return new class extends Migration
     {
         $driver = DB::getDriverName();
 
-        if (!in_array($driver, ['mysql', 'pgsql'], true)) {
+        if ($driver !== 'pgsql') {
             return;
         }
 
@@ -23,11 +23,6 @@ return new class extends Migration
     public function down(): void
     {
         $driver = DB::getDriverName();
-
-        if ($driver === 'mysql') {
-            DB::statement('ALTER TABLE users DROP CHECK chk_users_role_scope');
-            return;
-        }
 
         if ($driver === 'pgsql') {
             DB::statement('ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_role_scope');

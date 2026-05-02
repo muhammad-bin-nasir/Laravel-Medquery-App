@@ -16,6 +16,7 @@ Route::prefix('admin/auth')->group(function (): void {
     Route::post('/create-admin', [AdminAuthController::class, 'createAdmin']);
     Route::middleware(['admin.auth'])->group(function (): void {
         Route::post('/create-user', [AdminAuthController::class, 'createUser']);
+        Route::delete('/users/{user_id}', [AdminAuthController::class, 'deleteUser']);
     });
 });
 
@@ -36,6 +37,7 @@ Route::prefix('admin/businesses')->middleware(['admin.auth'])->group(function ()
     Route::post('', [AdminBusinessController::class, 'create']);
     Route::get('', [AdminBusinessController::class, 'index']);
     Route::get('/{business_client_id}', [AdminBusinessController::class, 'show']);
+    Route::delete('/{business_client_id}', [AdminBusinessController::class, 'delete']);
 
     Route::prefix('/{business_client_id}/workspaces')->group(function (): void {
         Route::post('', [AdminWorkspaceController::class, 'create']);

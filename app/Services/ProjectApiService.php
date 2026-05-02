@@ -116,6 +116,36 @@ class ProjectApiService
         return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces");
     }
 
+    public function listWorkspaces(string $business_client_id): array
+    {
+        $response = $this->client()->get("/admin/businesses/{$business_client_id}/workspaces");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces");
+    }
+
+    public function getWorkspace(string $business_client_id, string $workspace_id): array
+    {
+        $response = $this->client()->get("/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+    }
+
+    public function deleteUser(string $userId): array
+    {
+        $response = $this->client()->delete("/admin/auth/users/{$userId}");
+        return $this->handleResponse($response, "/admin/auth/users/{$userId}");
+    }
+
+    public function deleteBusiness(string $business_client_id): array
+    {
+        $response = $this->client()->delete("/admin/businesses/{$business_client_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}");
+    }
+
+    public function deleteWorkspace(string $business_client_id, string $workspace_id): array
+    {
+        $response = $this->client()->delete("/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+    }
+
     public function streamChat(array $payload): StreamedResponse
     {
         $response = $this->client()

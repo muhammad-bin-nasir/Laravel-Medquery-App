@@ -121,13 +121,17 @@ class AdminAuthController extends Controller
             if ($externalId === '') {
                 throw new RuntimeException('Project API create-admin did not return a user_id');
             }
+            $assignedRole = (string) ($projectAdmin['role'] ?? 'admin');
+            if (!in_array($assignedRole, ['admin', 'super_admin'], true)) {
+                $assignedRole = 'admin';
+            }
 
             $admin = User::query()->create([
                 'external_id' => $externalId,
                 'email' => $emailNormalized,
                 'email_normalized' => $emailNormalized,
                 'password_hash' => $passwordHash,
-                'role' => 'admin',
+                'role' => $assignedRole,
                 'business_id' => null,
                 'workspace_id' => null,
             ]);
@@ -183,6 +187,48 @@ class AdminAuthController extends Controller
             ->first();
 
         if (!$workspace) {
+            $workspace = Workspace::query()
+                ->where('business_client_id', $business->business_client_id)
+                ->where('id', $payload['workspace_id'])
+                ->first();
+        }
+
+        if (!$workspace) {
+            try {
+                $jwtToken = $this->jwtTokenService->createForProjectUser($admin)['access_token'];
+                $remoteWorkspace = $this->projectApiService
+                    ->withToken($jwtToken)
+                    ->getWorkspace($business->business_client_id, $payload['workspace_id']);
+
+                $workspace = Workspace::query()->updateOrCreate(
+                    [
+                        'business_client_id' => $business->business_client_id,
+                        'workspace_id' => (string) ($remoteWorkspace['workspace_id'] ?? $payload['workspace_id']),
+                    ],
+                    [
+                        'name' => (string) ($remoteWorkspace['name'] ?? $payload['workspace_id']),
+                    ]
+                );
+
+                $workspaceConfig = WorkspaceConfig::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->first();
+
+                if (!$workspaceConfig) {
+                    WorkspaceConfig::query()->create([
+                        'business_id' => $business->id,
+                        'workspace_id' => $workspace->id,
+                        ...$this->defaultWorkspaceConfigValues(),
+                    ]);
+                }
+            } catch (ProjectApiException $e) {
+                if ($e->getStatus() !== 404) {
+                    throw $e;
+                }
+            }
+        }
+
+        if (!$workspace) {
             return response()->json(['detail' => 'Workspace not found'], 404);
         }
 
@@ -204,7 +250,7 @@ class AdminAuthController extends Controller
         $passwordHash = Hash::make($payload['password']);
 
         try {
-            $jwtToken = app(JwtTokenService::class)->createForUser($admin)['access_token'];
+            $jwtToken = app(JwtTokenService::class)->createForProjectUser($admin)['access_token'];
             $projectUser = app(ProjectApiService::class)->withToken($jwtToken)->createUser([
                 'email' => $emailNormalized,
                 'password' => $payload['password'],
@@ -245,6 +291,60 @@ class AdminAuthController extends Controller
         ]);
     }
 
+    /**
+     * Delete a workspace-scoped user in FastAPI first, then remove the linked Laravel copy.
+     */
+    public function deleteUser(Request $request, string $user_id): JsonResponse
+    {
+        /** @var User $admin */
+        $admin = $request->attributes->get('admin');
+        if (!in_array($admin->role, ['admin', 'super_admin'], true)) {
+            return response()->json(['detail' => 'Not allowed'], 403);
+        }
+
+        $user = User::query()->find($user_id);
+        if (!$user) {
+            return response()->json(['detail' => 'User not found'], 404);
+        }
+
+        if ($user->role !== 'user') {
+            return response()->json(['detail' => 'Only workspace users can be deleted'], 403);
+        }
+
+        if ($admin->role === 'admin') {
+            $business = $user->business_id ? Business::query()->find($user->business_id) : null;
+            if (!$business || $business->admin_id !== $admin->id) {
+                return response()->json(['detail' => 'Not allowed'], 403);
+            }
+        }
+
+        if (!is_string($user->external_id) || trim($user->external_id) === '') {
+            return response()->json([
+                'detail' => 'User is missing Project API identifier',
+                'code' => 'user_sync_failed',
+            ], 500);
+        }
+
+        try {
+            $jwtToken = $this->jwtTokenService->createForProjectUser($admin)['access_token'];
+            $this->projectApiService->withToken($jwtToken)->deleteUser($user->external_id);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => $this->resolveDeleteUserError($e),
+                'code' => 'user_delete_sync_failed',
+            ], $this->resolveDeleteUserStatus($e));
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'status' => 'deleted',
+            'user_id' => $user_id,
+        ]);
+    }
+
     private function resolveCreateUserError(Throwable $e): string
     {
         if ($e instanceof ProjectApiException) {
@@ -272,8 +372,52 @@ class AdminAuthController extends Controller
         return 500;
     }
 
+    private function resolveDeleteUserError(Throwable $e): string
+    {
+        if ($e instanceof ProjectApiException) {
+            $body = $e->getBody();
+            if (is_array($body) && isset($body['detail']) && is_string($body['detail'])) {
+                return $body['detail'];
+            }
+
+            return $e->getMessage();
+        }
+
+        if ($e instanceof RuntimeException) {
+            return $e->getMessage();
+        }
+
+        return 'Unable to delete user';
+    }
+
+    private function resolveDeleteUserStatus(Throwable $e): int
+    {
+        if ($e instanceof ProjectApiException) {
+            return $e->getStatus();
+        }
+
+        return 500;
+    }
+
     private function normalizeEmail(string $email): string
     {
         return strtolower(trim($email));
+    }
+
+    private function defaultWorkspaceConfigValues(): array
+    {
+        return [
+            'chunk_words' => 300,
+            'overlap_words' => 50,
+            'top_k' => 5,
+            'similarity_threshold' => 0.2,
+            'max_context_chars' => 12000,
+            'embedding_model' => 'text-embedding-3-small',
+            'use_local_embeddings' => false,
+            'chat_model_default' => 'gpt-4.1-mini',
+            'chat_temperature_default' => 0.2,
+            'chat_max_tokens_default' => 600,
+            'prompt_engineering' => 'You are a medical assistant. Provide concise answers based on the context.',
+        ];
     }
 }

@@ -9,6 +9,28 @@ class JwtTokenService
 {
     public function createForUser(User $user): array
     {
+        return $this->createToken(
+            subject: (string) $user->id,
+            businessId: $user->business_id,
+            role: $user->role,
+        );
+    }
+
+    public function createForProjectUser(User $user): array
+    {
+        $subject = is_string($user->external_id) && trim($user->external_id) !== ''
+            ? trim($user->external_id)
+            : (string) $user->id;
+
+        return $this->createToken(
+            subject: $subject,
+            businessId: $user->business_id,
+            role: $user->role,
+        );
+    }
+
+    private function createToken(string $subject, ?string $businessId, string $role): array
+    {
         $secret = (string) env('JWT_SECRET_KEY', '');
         if ($secret === '') {
             throw new RuntimeException('JWT secret is not configured');
@@ -19,9 +41,9 @@ class JwtTokenService
 
         $header = ['alg' => 'HS256', 'typ' => 'JWT'];
         $payload = [
-            'sub' => (string) $user->id,
-            'business_id' => $user->business_id,
-            'role' => $user->role,
+            'sub' => $subject,
+            'business_id' => $businessId,
+            'role' => $role,
             'exp' => $expiresAt,
         ];
 
