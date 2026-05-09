@@ -44,4 +44,15 @@ return [
         'base_url' => env('PROJECT_API_BASE_URL', 'http://127.0.0.1:8000/api'),
     ],
 
+    'fastapi' => [
+        'base_url' => env('FASTAPI_BASE_URL', 'http://127.0.0.1:8000'),
+        'token' => env('FASTAPI_TOKEN'),
+        'timeout' => (int) env('FASTAPI_TIMEOUT', 120),
+        'connect_timeout' => (int) env('FASTAPI_CONNECT_TIMEOUT', 10),
+        'stream_timeout' => (int) env('FASTAPI_STREAM_TIMEOUT', 300),
+        'retry_times' => (int) env('FASTAPI_RETRY_TIMES', 2),
+        'retry_sleep_ms' => (int) env('FASTAPI_RETRY_SLEEP_MS', 200),
+        'max_image_bytes' => (int) env('FASTAPI_IMAGE_MAX_BYTES', 5242880),
+    ],
+
 ];

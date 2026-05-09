@@ -133,6 +133,7 @@ class AdminAuthController extends Controller
                 'password_hash' => $passwordHash,
                 'role' => $assignedRole,
                 'business_id' => null,
+                'business_client_id' => null,
                 'workspace_id' => null,
             ]);
         } catch (Throwable $e) {
@@ -202,10 +203,11 @@ class AdminAuthController extends Controller
 
                 $workspace = Workspace::query()->updateOrCreate(
                     [
-                        'business_client_id' => $business->business_client_id,
+                        'business_id' => $business->id,
                         'workspace_id' => (string) ($remoteWorkspace['workspace_id'] ?? $payload['workspace_id']),
                     ],
                     [
+                        'business_client_id' => $business->business_client_id,
                         'name' => (string) ($remoteWorkspace['name'] ?? $payload['workspace_id']),
                     ]
                 );
@@ -271,6 +273,7 @@ class AdminAuthController extends Controller
                     'password_hash' => $passwordHash,
                     'role' => 'user',
                     'business_id' => $business->id,
+                    'business_client_id' => $business->business_client_id,
                     'workspace_id' => $workspace->id,
                 ]);
             });

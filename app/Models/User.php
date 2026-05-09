@@ -27,6 +27,7 @@ class User extends Authenticatable
         'id',
         'external_id',
         'business_id',
+        'business_client_id',
         'workspace_id',
         'email',
         'email_normalized',
@@ -43,6 +44,7 @@ class User extends Authenticatable
         return [
             'external_id' => 'string',
             'business_id' => 'string',
+            'business_client_id' => 'string',
             'workspace_id' => 'string',
         ];
     }

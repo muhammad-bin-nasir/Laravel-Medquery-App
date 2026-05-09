@@ -17,8 +17,17 @@ class Workspace extends Model
 
     protected $fillable = [
         'id',
+        'business_id',
         'business_client_id',
         'workspace_id',
         'name',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'business_id' => 'string',
+            'business_client_id' => 'string',
+        ];
+    }
 }

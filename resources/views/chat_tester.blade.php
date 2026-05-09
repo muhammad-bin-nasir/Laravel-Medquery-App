@@ -130,18 +130,44 @@
             overflow: auto;
         }
 
+        .image-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .image-info.err {
+            color: var(--err);
+        }
+
+        .image-preview {
+            margin-top: 10px;
+            max-width: 240px;
+            max-height: 160px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: none;
+        }
+
     </style>
 </head>
 <body>
     <div class="wrap">
         <section class="card">
             <h1>Chat</h1>
-            <p>Enter a prompt and send. This uses the same `/api/chat/generate` flow as the chat section in `/test`.</p>
+            <p>Enter a prompt, optionally attach an image, and send to `/api/ai/chat`.</p>
 
             <input id="query" type="text" placeholder="Type your message here..." value="What does the uploaded document explain about clustering?">
+            <input id="imagePicker" type="file" accept="image/*" style="display:none;">
             <div class="actions">
+                <button id="selectImageBtn" class="btn-secondary" type="button">Select Image</button>
+                <button id="clearImageBtn" class="btn-secondary" type="button">Clear Image</button>
+                <button id="resetDefaultsBtn" class="btn-secondary" type="button">Reset Defaults</button>
                 <button id="askBtn" class="btn-primary" type="button">Send</button>
             </div>
+
+            <div id="imageInfo" class="image-info">No image selected.</div>
+            <img id="imagePreview" class="image-preview" alt="Selected image preview">
 
             <div id="status" class="status"></div>
         </section>
@@ -159,12 +185,24 @@
 
     <script>
         const queryEl = document.getElementById('query');
+        const imagePickerEl = document.getElementById('imagePicker');
+        const imageInfoEl = document.getElementById('imageInfo');
+        const imagePreviewEl = document.getElementById('imagePreview');
+        const selectImageBtn = document.getElementById('selectImageBtn');
+        const clearImageBtn = document.getElementById('clearImageBtn');
+        const resetDefaultsBtn = document.getElementById('resetDefaultsBtn');
 
         const askBtn = document.getElementById('askBtn');
 
         const statusEl = document.getElementById('status');
         const ragOutputEl = document.getElementById('ragOutput');
         const chatOutputEl = document.getElementById('chatOutput');
+
+        const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+        const FALLBACK_BUSINESS_CLIENT_ID = 'test';
+        const FALLBACK_WORKSPACE_ID = 'test';
+        const FALLBACK_USER_ID = 'admin@admin.com';
+        let selectedImageDataUrl = '';
 
         function setStatus(message, ok) {
             statusEl.textContent = message;
@@ -173,6 +211,49 @@
 
         function pretty(value) {
             return JSON.stringify(value, null, 2);
+        }
+
+        function setImageInfo(message, isError) {
+            imageInfoEl.textContent = message;
+            imageInfoEl.className = isError ? 'image-info err' : 'image-info';
+        }
+
+        function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ''));
+                reader.onerror = () => reject(new Error('Failed to read image file.'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function clearImageSelection() {
+            selectedImageDataUrl = '';
+            imagePickerEl.value = '';
+            imagePreviewEl.src = '';
+            imagePreviewEl.style.display = 'none';
+            setImageInfo('No image selected.', false);
+        }
+
+        function resetChatDefaults() {
+            const userRaw = localStorage.getItem('api_user');
+            let user = {};
+            if (userRaw) {
+                try {
+                    user = JSON.parse(userRaw) || {};
+                } catch (error) {
+                    user = {};
+                }
+            }
+
+            const nextDefaults = {
+                business_client_id: FALLBACK_BUSINESS_CLIENT_ID,
+                workspace_id: FALLBACK_WORKSPACE_ID,
+                user_id: (user.email || FALLBACK_USER_ID).toString().trim(),
+            };
+
+            localStorage.setItem('api_chat_defaults', JSON.stringify(nextDefaults));
+            setStatus('Chat defaults reset to test/test.', true);
         }
 
         function payload() {
@@ -197,25 +278,33 @@
                 }
             }
 
-            const businessClientId = (defaults.business_client_id || 'acme').toString().trim();
-            let workspaceId = (defaults.workspace_id || 'main').toString().trim();
+            let businessClientId = (defaults.business_client_id || FALLBACK_BUSINESS_CLIENT_ID).toString().trim();
+            let workspaceId = (defaults.workspace_id || FALLBACK_WORKSPACE_ID).toString().trim();
 
-            if (!workspaceId || (businessClientId === 'acme' && workspaceId === 'test')) {
-                workspaceId = 'main';
+            const staleLegacyPair = businessClientId === 'acme' && workspaceId === 'main';
+            if (!businessClientId || !workspaceId || staleLegacyPair) {
+                businessClientId = FALLBACK_BUSINESS_CLIENT_ID;
+                workspaceId = FALLBACK_WORKSPACE_ID;
             }
 
             localStorage.setItem('api_chat_defaults', JSON.stringify({
                 business_client_id: businessClientId,
                 workspace_id: workspaceId,
-                user_id: (defaults.user_id || user.email || 'admin@admin.com').toString().trim(),
+                user_id: (defaults.user_id || user.email || FALLBACK_USER_ID).toString().trim(),
             }));
 
-            return {
+            const body = {
                 business_client_id: businessClientId,
                 workspace_id: workspaceId,
-                user_id: (defaults.user_id || user.email || 'admin@admin.com').toString().trim(),
+                user_id: (defaults.user_id || user.email || FALLBACK_USER_ID).toString().trim(),
                 query: queryEl.value.trim(),
             };
+
+            if (selectedImageDataUrl) {
+                body.image_data_url = selectedImageDataUrl;
+            }
+
+            return body;
         }
 
         async function callApi(url, body) {
@@ -254,7 +343,7 @@
                 throw new Error('Chat defaults are missing. Open /test once or login again.');
             }
 
-            const result = await callApi('/api/chat/generate', body);
+            const result = await callApi('/api/ai/chat', body);
             chatOutputEl.textContent = pretty(result);
 
             if (result.ok && result.body && typeof result.body === 'object') {
@@ -263,9 +352,52 @@
                 ragOutputEl.textContent = '[]';
             }
 
-            setStatus('Chat generate returned ' + result.status, result.ok);
+            setStatus('AI chat returned ' + result.status, result.ok);
             return result;
         }
+
+        selectImageBtn.addEventListener('click', () => {
+            imagePickerEl.click();
+        });
+
+        clearImageBtn.addEventListener('click', () => {
+            clearImageSelection();
+        });
+
+        resetDefaultsBtn.addEventListener('click', () => {
+            resetChatDefaults();
+        });
+
+        imagePickerEl.addEventListener('change', async () => {
+            const file = imagePickerEl.files && imagePickerEl.files[0];
+            if (!file) {
+                clearImageSelection();
+                return;
+            }
+
+            if (!file.type.startsWith('image/')) {
+                clearImageSelection();
+                setImageInfo('Only image files are allowed.', true);
+                return;
+            }
+
+            if (file.size > MAX_IMAGE_BYTES) {
+                clearImageSelection();
+                setImageInfo('Image is too large. Max size is 5MB.', true);
+                return;
+            }
+
+            try {
+                selectedImageDataUrl = await fileToDataUrl(file);
+                const fileSizeKb = Math.round(file.size / 1024);
+                setImageInfo('Selected: ' + file.name + ' (' + fileSizeKb + ' KB)', false);
+                imagePreviewEl.src = selectedImageDataUrl;
+                imagePreviewEl.style.display = 'block';
+            } catch (error) {
+                clearImageSelection();
+                setImageInfo(error.message || 'Failed to process image.', true);
+            }
+        });
 
         askBtn.addEventListener('click', async () => {
             try {
@@ -281,6 +413,9 @@
                 askBtn.click();
             }
         });
+
+        // Avoid stale localStorage defaults from older test pages.
+        resetChatDefaults();
     </script>
 </body>
 </html>

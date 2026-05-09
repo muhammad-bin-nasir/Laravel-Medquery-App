@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminAuthController;
+use App\Http\Controllers\Api\AiController;
 use App\Http\Controllers\Api\AdminBusinessController;
 use App\Http\Controllers\Api\AdminDocumentController;
 use App\Http\Controllers\Api\AdminWorkspaceController;
@@ -82,4 +83,10 @@ Route::prefix('chat')->group(function (): void {
 
 Route::prefix('rag')->middleware(['admin.auth'])->group(function (): void {
     Route::post('/retrieve', [RagController::class, 'retrieve']);
+});
+
+Route::prefix('ai')->middleware(['ai.error', 'admin.auth', 'tenant.context', 'throttle:30,1'])->group(function (): void {
+    Route::post('/chat', [AiController::class, 'chat']);
+    Route::post('/chat/stream', [AiController::class, 'stream']);
+    Route::post('/retrieve', [AiController::class, 'retrieve']);
 });

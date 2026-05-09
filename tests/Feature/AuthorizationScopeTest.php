@@ -33,7 +33,7 @@ class AuthorizationScopeTest extends TestCase
         $adminB = $this->makeAdmin('admin-b@test.local');
 
         $businessB = $this->makeBusiness('biz-b', 'Business B', $adminB->id);
-        $workspaceB = $this->makeWorkspace($businessB->business_client_id, 'main-b');
+        $workspaceB = $this->makeWorkspace($businessB, 'main-b');
 
         $tokenA = $this->tokenFor($adminA);
 
@@ -54,8 +54,8 @@ class AuthorizationScopeTest extends TestCase
         $admin = $this->makeAdmin('admin-owner@test.local');
         $business = $this->makeBusiness('biz-a', 'Business A', $admin->id);
 
-        $workspaceAllowed = $this->makeWorkspace($business->business_client_id, 'ws-allowed');
-        $workspaceBlocked = $this->makeWorkspace($business->business_client_id, 'ws-blocked');
+        $workspaceAllowed = $this->makeWorkspace($business, 'ws-allowed');
+        $workspaceBlocked = $this->makeWorkspace($business, 'ws-blocked');
 
         WorkspaceConfig::query()->create([
             'id' => (string) Str::uuid(),
@@ -70,6 +70,7 @@ class AuthorizationScopeTest extends TestCase
             'password_hash' => Hash::make('User@12345'),
             'role' => 'user',
             'business_id' => $business->id,
+            'business_client_id' => $business->business_client_id,
             'workspace_id' => $workspaceAllowed->id,
         ]);
 
@@ -92,7 +93,7 @@ class AuthorizationScopeTest extends TestCase
     {
         $admin = $this->makeAdmin('admin-owner-2@test.local');
         $business = $this->makeBusiness('biz-global', 'Business Global', $admin->id);
-        $workspace = $this->makeWorkspace($business->business_client_id, 'ws-global');
+        $workspace = $this->makeWorkspace($business, 'ws-global');
 
         WorkspaceConfig::query()->create([
             'id' => (string) Str::uuid(),
@@ -107,6 +108,7 @@ class AuthorizationScopeTest extends TestCase
             'password_hash' => Hash::make('Super@12345'),
             'role' => 'super_admin',
             'business_id' => null,
+            'business_client_id' => null,
             'workspace_id' => null,
         ]);
 
@@ -143,6 +145,7 @@ class AuthorizationScopeTest extends TestCase
             'password_hash' => Hash::make('Admin@12345'),
             'role' => 'admin',
             'business_id' => (string) Str::uuid(),
+            'business_client_id' => null,
             'workspace_id' => null,
         ]);
     }
@@ -163,6 +166,7 @@ class AuthorizationScopeTest extends TestCase
             'password_hash' => Hash::make('Admin@12345'),
             'role' => 'admin',
             'business_id' => null,
+            'business_client_id' => null,
             'workspace_id' => null,
         ]);
     }
@@ -177,11 +181,12 @@ class AuthorizationScopeTest extends TestCase
         ]);
     }
 
-    private function makeWorkspace(string $businessClientId, string $workspaceId): Workspace
+    private function makeWorkspace(Business $business, string $workspaceId): Workspace
     {
         return Workspace::query()->create([
             'id' => (string) Str::uuid(),
-            'business_client_id' => $businessClientId,
+            'business_id' => $business->id,
+            'business_client_id' => $business->business_client_id,
             'workspace_id' => $workspaceId,
             'name' => strtoupper($workspaceId),
         ]);

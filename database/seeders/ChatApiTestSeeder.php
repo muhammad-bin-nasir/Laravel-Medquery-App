@@ -31,10 +31,11 @@ class ChatApiTestSeeder extends Seeder
 
         $workspace = Workspace::query()->firstOrCreate(
             [
-                'business_client_id' => $business->business_client_id,
+                'business_id' => $business->id,
                 'workspace_id' => 'main',
             ],
             [
+                'business_client_id' => $business->business_client_id,
                 'id' => (string) Str::uuid(),
                 'name' => 'Main Workspace',
             ]
@@ -45,6 +46,7 @@ class ChatApiTestSeeder extends Seeder
             [
                 'id' => (string) Str::uuid(),
                 'business_id' => null,
+                'business_client_id' => null,
                 'workspace_id' => null,
                 'email' => 'admin@admin.com',
                 'password_hash' => Hash::make('admin@12345'),

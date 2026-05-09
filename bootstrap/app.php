@@ -5,6 +5,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\AuthenticateAdminToken;
 use App\Http\Middleware\AttachCorrelationId;
+use App\Http\Middleware\InjectTenantContext;
+use App\Http\Middleware\NormalizeAiErrorResponse;
 use App\Http\Middleware\NormalizeApiErrorResponse;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -22,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin.auth' => AuthenticateAdminToken::class,
+            'tenant.context' => InjectTenantContext::class,
+            'ai.error' => NormalizeAiErrorResponse::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -17,6 +17,10 @@ class NormalizeApiErrorResponse
             return $response;
         }
 
+        if ($request->is('api/ai/*')) {
+            return $response;
+        }
+
         if ($response->getStatusCode() < 400) {
             return $response;
         }

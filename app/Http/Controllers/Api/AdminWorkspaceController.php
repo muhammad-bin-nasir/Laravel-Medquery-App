@@ -76,6 +76,7 @@ class AdminWorkspaceController extends Controller
             if ($e->getStatus() === 400 && str_contains(strtolower($upstreamDetail), 'workspace already exists')) {
                 $workspace = DB::transaction(function () use ($business, $payload): Workspace {
                     $workspace = Workspace::query()->create([
+                        'business_id' => $business->id,
                         'business_client_id' => $business->business_client_id,
                         'workspace_id' => $payload['workspace_id'],
                         'name' => $payload['name'],
@@ -110,6 +111,7 @@ class AdminWorkspaceController extends Controller
 
         $workspace = DB::transaction(function () use ($business, $payload): Workspace {
             $workspace = Workspace::query()->create([
+                'business_id' => $business->id,
                 'business_client_id' => $business->business_client_id,
                 'workspace_id' => $payload['workspace_id'],
                 'name' => $payload['name'],
@@ -291,10 +293,11 @@ class AdminWorkspaceController extends Controller
 
         $workspace = Workspace::query()->updateOrCreate(
             [
-                'business_client_id' => $business->business_client_id,
+                'business_id' => $business->id,
                 'workspace_id' => $workspaceId,
             ],
             [
+                'business_client_id' => $business->business_client_id,
                 'name' => $name,
             ]
         );

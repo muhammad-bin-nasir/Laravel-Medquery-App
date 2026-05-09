@@ -23,12 +23,12 @@ This app ports the `Project/app/api/routes/chat.py` API surface into Laravel.
 Set these in `.env`:
 
 ```dotenv
-DB_CONNECTION=mariadb
+DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=test_app
-DB_USERNAME=root
-DB_PASSWORD=
+DB_USERNAME=test_app_user
+DB_PASSWORD=test_app_password
 
 SESSION_DRIVER=database
 JWT_SECRET_KEY=your-secret
