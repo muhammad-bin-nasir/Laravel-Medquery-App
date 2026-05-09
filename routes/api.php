@@ -87,6 +87,7 @@ Route::prefix('rag')->middleware(['admin.auth'])->group(function (): void {
 
 Route::prefix('ai')->middleware(['ai.error', 'admin.auth', 'tenant.context', 'throttle:30,1'])->group(function (): void {
     Route::post('/chat', [AiController::class, 'chat']);
+    Route::post('/chat/voice', [AiController::class, 'voice']);
     Route::post('/chat/stream', [AiController::class, 'stream']);
     Route::post('/retrieve', [AiController::class, 'retrieve']);
 });

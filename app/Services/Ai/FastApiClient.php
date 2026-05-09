@@ -7,6 +7,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -191,6 +192,70 @@ class FastApiClient
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
         ]);
+    }
+
+    public function chatVoice(array $payload, UploadedFile $audioFile, string $correlationId): array
+    {
+        $normalizedPayload = array_filter($payload, static fn (mixed $value): bool => $value !== null);
+
+        try {
+            $audioPath = $audioFile->getRealPath();
+            if ($audioPath === false || $audioPath === '') {
+                throw new FastApiException(
+                    422,
+                    'invalid_audio_upload',
+                    'Uploaded audio file could not be read.',
+                );
+            }
+
+            $audioContent = @file_get_contents($audioPath);
+            if ($audioContent === false) {
+                throw new FastApiException(
+                    422,
+                    'invalid_audio_upload',
+                    'Uploaded audio file could not be read.',
+                );
+            }
+
+            $response = $this->request($correlationId)
+                ->asMultipart()
+                ->attach(
+                    'audio_file',
+                    $audioContent,
+                    $audioFile->getClientOriginalName() ?: 'voice-note.webm',
+                    ['Content-Type' => $audioFile->getClientMimeType() ?: ($audioFile->getMimeType() ?: 'application/octet-stream')]
+                )
+                ->post($this->endpoint('/api/chat/voice-generate'), $normalizedPayload);
+        } catch (FastApiException $e) {
+            throw $e;
+        } catch (RequestException $e) {
+            if ($e->response instanceof Response) {
+                throw $this->toException($e->response, '/api/chat/voice-generate');
+            }
+
+            throw new FastApiException(
+                502,
+                'upstream_unavailable',
+                'Unable to connect to AI service voice endpoint.',
+                ['exception' => $e->getMessage()]
+            );
+        } catch (ConnectionException $e) {
+            throw new FastApiException(
+                504,
+                'upstream_timeout',
+                'AI service timed out while processing voice request.',
+                ['exception' => $e->getMessage()]
+            );
+        } catch (Throwable $e) {
+            throw new FastApiException(
+                502,
+                'upstream_unavailable',
+                'Unable to connect to AI service voice endpoint.',
+                ['exception' => $e->getMessage()]
+            );
+        }
+
+        return $this->decodeJsonResponse($response, '/api/chat/voice-generate');
     }
 
     private function request(string $correlationId, bool $streaming = false): PendingRequest
