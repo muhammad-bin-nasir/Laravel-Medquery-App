@@ -73,8 +73,10 @@ Route::prefix('chat')->group(function (): void {
     Route::get('/test-stream', [ChatController::class, 'testStream']);
 
     Route::middleware(['admin.auth', 'throttle:30,1'])->group(function (): void {
+        Route::post('/headers', [ChatController::class, 'createChatHeader']);
         Route::delete('/headers/{chat_id}', [ChatController::class, 'deleteChatHeader']);
         Route::get('/headers/me', [ChatController::class, 'getMyChatHeaders']);
+        Route::get('/threads/{chat_id}', [ChatController::class, 'getChatThread']);
         Route::get('/history/{user_id}', [ChatController::class, 'getUserChatHistory']);
         Route::post('/generate', [ChatController::class, 'generateChat']);
         Route::post('/stream', [ChatController::class, 'streamChat']);

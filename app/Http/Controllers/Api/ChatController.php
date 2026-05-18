@@ -15,6 +15,7 @@ use App\Services\ProjectApiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +28,30 @@ class ChatController extends Controller
     public function deleteChatHeader(Request $request, string $chat_id): JsonResponse
     {
         $admin = $this->admin($request);
+        try {
+            $jwtToken = app(
+                \App\Services\JwtTokenService::class
+            )->createForProjectUser($admin)['access_token'];
+
+            $this->projectApiService
+                ->withToken($jwtToken)
+                ->deleteChatHeader($chat_id);
+        } catch (ProjectApiException $e) {
+            if ($e->getStatus() !== 404) {
+                return response()->json([
+                    'detail' => 'Failed to sync chat deletion to Project backend',
+                    'code' => 'chat_delete_sync_failed',
+                    'errors' => $e->getBody() ?? $e->getMessage(),
+                ], $e->getStatus());
+            }
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => 'Failed to sync chat deletion to Project backend',
+                'code' => 'chat_delete_sync_failed',
+            ], 500);
+        }
 
         $header = ChatHeader::query()
             ->where('chat_id', $chat_id)
@@ -44,9 +69,9 @@ class ChatController extends Controller
         }
 
         $requestIds = ChatRequest::query()
+            ->where('chat_header', $chat_id)
             ->where('business_id', $header->business_id)
             ->where('workspace_id', $header->workspace_id)
-            ->where('chat_header', $chat_id)
             ->where(function ($q) use ($admin): void {
                 $q->where('user_uuid', $admin->id)
                     ->orWhere(function ($nested) use ($admin): void {
@@ -68,9 +93,39 @@ class ChatController extends Controller
         return response()->json(['status' => 'deleted', 'chat_id' => $chat_id]);
     }
 
+    public function getChatThread(Request $request, string $chat_id): JsonResponse
+    {
+        $admin = $this->admin($request);
+
+        try {
+            $jwtToken = app(\App\Services\JwtTokenService::class)->createForProjectUser($admin)['access_token'];
+
+            $thread = $this->projectApiService
+                ->withToken($jwtToken)
+                ->getChatThread($chat_id);
+
+            return response()->json($thread);
+        } catch (ProjectApiException $e) {
+            return response()->json([
+                'detail' => 'Failed to load chat thread from Project backend',
+                'code' => 'chat_thread_load_failed',
+                'errors' => $e->getBody() ?? $e->getMessage(),
+            ], $e->getStatus());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => 'Failed to load chat thread from Project backend',
+                'code' => 'chat_thread_load_failed',
+            ], 500);
+        }
+    }
+
     public function getMyChatHeaders(Request $request): JsonResponse
     {
         $admin = $this->admin($request);
+
+        $this->syncChatHeadersFromProject($admin);
 
         $headers = ChatHeader::query()
             ->where(function ($q) use ($admin): void {
@@ -95,6 +150,94 @@ class ChatController extends Controller
                 'updated_at' => optional($header->updated_at)?->toISOString(),
             ])->values(),
         ]);
+    }
+
+    private function syncChatHeadersFromProject(User $admin): void
+    {
+        try {
+            $jwtToken = app(
+                \App\Services\JwtTokenService::class
+            )->createForProjectUser($admin)['access_token'];
+
+            $remoteHeaders = $this->projectApiService
+                ->withToken($jwtToken)
+                ->getMyChatHeaders();
+        } catch (ProjectApiException) {
+            return;
+        } catch (\Throwable $throwable) {
+            report($throwable);
+            return;
+        }
+
+        $remoteChats = is_array($remoteHeaders['chats'] ?? null)
+            ? $remoteHeaders['chats']
+            : [];
+
+        foreach ($remoteChats as $chat) {
+            if (!is_array($chat)) {
+                continue;
+            }
+
+            $chatId = trim((string) ($chat['chat_id'] ?? ''));
+            if ($chatId === '') {
+                continue;
+            }
+
+            $title = trim((string) ($chat['title'] ?? ''));
+            if ($title === '') {
+                $title = 'New chat';
+            }
+
+            ChatHeader::query()->updateOrCreate(
+                [
+                    'owner_user_id' => $admin->email,
+                    'chat_id' => $chatId,
+                ],
+                [
+                    'owner_user_uuid' => $admin->id,
+                    'title' => Str::limit($title, 80, ''),
+                ]
+            );
+        }
+    }
+
+    public function createChatHeader(Request $request): JsonResponse
+    {
+        $admin = $this->admin($request);
+        $payload = $request->validate([
+            'business_client_id' => ['required', 'string', 'max:100'],
+            'workspace_id' => ['required', 'string', 'max:100'],
+            'user_id' => ['required', 'string', 'max:255'],
+            'chat_id' => ['required', 'string', 'max:255'],
+            'chat_title' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $payload['business_client_id'] = trim((string) $payload['business_client_id']);
+        $payload['workspace_id'] = trim((string) $payload['workspace_id']);
+        $payload['user_id'] = strtolower(trim((string) $payload['user_id']));
+        $payload['chat_id'] = trim((string) $payload['chat_id']);
+
+        try {
+            $jwtToken = app(\App\Services\JwtTokenService::class)->createForProjectUser($admin)['access_token'];
+            $header = $this->projectApiService
+                ->withToken($jwtToken)
+                ->createChatHeader($payload);
+        } catch (ProjectApiException $e) {
+            return response()->json([
+                'detail' => 'Failed to sync chat header to Project backend',
+                'code' => 'chat_header_sync_failed',
+                'errors' => $e->getBody() ?? $e->getMessage(),
+            ], $e->getStatus());
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => 'Failed to sync chat header to Project backend',
+                'code' => 'chat_header_sync_failed',
+            ], 500);
+        }
+
+        return response()->json($header, 201);
     }
 
     public function getUserChatHistory(Request $request, string $user_id): JsonResponse
@@ -270,5 +413,35 @@ class ChatController extends Controller
         }
 
         return [$business, $workspace, $config];
+    }
+
+    private function resolveHeaderScope(User $admin, array $payload): array
+    {
+        $business = Business::query()->where('business_client_id', $payload['business_client_id'])->first();
+        if (!$business) {
+            throw new HttpException(404, 'Business not found');
+        }
+
+        if ($admin->role === 'admin' && $business->admin_id && $business->admin_id !== $admin->id) {
+            throw new HttpException(403, 'Not allowed');
+        }
+
+        $workspace = Workspace::query()
+            ->where('business_client_id', $business->business_client_id)
+            ->where('workspace_id', $payload['workspace_id'])
+            ->first();
+
+        if (!$workspace) {
+            throw new HttpException(
+                404,
+                sprintf(
+                    'Workspace not found for business_client_id "%s" and workspace_id "%s"',
+                    $business->business_client_id,
+                    $payload['workspace_id']
+                )
+            );
+        }
+
+        return [$business, $workspace];
     }
 }

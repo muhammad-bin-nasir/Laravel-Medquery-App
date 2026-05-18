@@ -183,4 +183,32 @@ class ProjectApiService
             'X-Accel-Buffering' => 'no',
         ]);
     }
+
+    public function getMyChatHeaders(): array
+    {
+        $response = $this->client()->get('/chat/headers/me');
+
+        return $this->handleResponse($response, '/chat/headers/me');
+    }
+    
+    public function getChatThread(string $chat_id): array
+    {
+        $response = $this->client()->get("/chat/threads/{$chat_id}");
+        
+        return $this->handleResponse($response, "/chat/threads/{$chat_id}");
+    }
+    
+    public function deleteChatHeader(string $chat_id): array
+    {
+        $response = $this->client()->delete("/chat/headers/{$chat_id}");
+        
+        return $this->handleResponse($response, "/chat/headers/{$chat_id}");
+    }
+
+    public function createChatHeader(array $payload): array
+    {
+        $response = $this->client()->post('/chat/headers', $payload);
+
+        return $this->handleResponse($response, '/chat/headers');
+    }
 }

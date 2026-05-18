@@ -95,8 +95,9 @@ class AdminAuthController extends Controller
     public function createAdmin(Request $request): JsonResponse
     {
         $payload = $request->validate([
+            'username' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email'],
-            'password' => ['required', 'string', 'min:6'],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
 
         $emailNormalized = $this->normalizeEmail($payload['email']);
@@ -113,6 +114,7 @@ class AdminAuthController extends Controller
 
         try {
             $projectAdmin = $this->projectApiService->createAdmin([
+                'username' => $payload['username'] ?? null,
                 'email' => $emailNormalized,
                 'password' => $payload['password'],
             ]);
