@@ -104,6 +104,12 @@ class ProjectApiService
         return $this->handleResponse($response, '/admin/auth/create-admin');
     }
 
+    public function userSignup(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/user-signup', $payload);
+        return $this->handleResponse($response, '/admin/auth/user-signup');
+    }
+
     public function createBusiness(array $payload): array
     {
         $response = $this->client()->post('/admin/businesses', $payload);

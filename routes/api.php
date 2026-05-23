@@ -9,12 +9,14 @@ use App\Http\Controllers\Api\AdminWorkspaceController;
 use App\Http\Controllers\Api\AdminWorkspaceConfigController;
 use App\Http\Controllers\Api\AdminSystemConfigController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\RagController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin/auth')->group(function (): void {
     Route::post('/login', [AdminAuthController::class, 'login']);
     Route::post('/create-admin', [AdminAuthController::class, 'createAdmin']);
+    Route::post('/user-signup', [AdminAuthController::class, 'userSignup']);
     Route::middleware(['admin.auth'])->group(function (): void {
         Route::post('/create-user', [AdminAuthController::class, 'createUser']);
         Route::delete('/users/{user_id}', [AdminAuthController::class, 'deleteUser']);
@@ -92,4 +94,9 @@ Route::prefix('ai')->middleware(['ai.error', 'admin.auth', 'tenant.context', 'th
     Route::post('/chat/voice', [AiController::class, 'voice']);
     Route::post('/chat/stream', [AiController::class, 'stream']);
     Route::post('/retrieve', [AiController::class, 'retrieve']);
+});
+
+Route::prefix('payments')->middleware(['admin.auth'])->group(function (): void {
+    Route::post('/create-intent', [PaymentController::class, 'createIntent']);
+    Route::post('/confirm-plan', [PaymentController::class, 'confirmPlan']);
 });

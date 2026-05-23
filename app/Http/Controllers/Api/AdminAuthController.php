@@ -156,6 +156,81 @@ class AdminAuthController extends Controller
     }
 
     /**
+     * Public self-registration for end users.
+     * Calls FastAPI /admin/auth/user-signup, which auto-assigns the user to the default tenant.
+     * Then persists the linked Laravel copy.
+     */
+    public function userSignup(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'username' => ['nullable', 'string', 'max:255'],
+            'email'    => ['required', 'email'],
+            'password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $emailNormalized = $this->normalizeEmail($payload['email']);
+
+        $existing = User::query()->where('email_normalized', $emailNormalized)->first();
+        if ($existing) {
+            return response()->json([
+                'detail' => 'User already exists',
+                'code'   => 'user_already_exists',
+            ], 409);
+        }
+
+        $passwordHash = Hash::make($payload['password']);
+
+        try {
+            $projectUser = $this->projectApiService->userSignup([
+                'username' => $payload['username'] ?? null,
+                'email'    => $emailNormalized,
+                'password' => $payload['password'],
+            ]);
+
+            $externalId      = (string) ($projectUser['user_id'] ?? '');
+            $businessClientId = (string) ($projectUser['business_client_id'] ?? 'default');
+            $workspaceSlug    = (string) ($projectUser['workspace_id'] ?? 'default');
+
+            if ($externalId === '') {
+                throw new RuntimeException('Project API user-signup did not return a user_id');
+            }
+
+            $business  = Business::query()->where('business_client_id', $businessClientId)->first();
+            $workspace = $business
+                ? Workspace::query()
+                    ->where('business_id', $business->id)
+                    ->where('workspace_id', $workspaceSlug)
+                    ->first()
+                : null;
+
+            $user = User::query()->create([
+                'external_id'        => $externalId,
+                'email'              => $emailNormalized,
+                'email_normalized'   => $emailNormalized,
+                'password_hash'      => $passwordHash,
+                'role'               => 'user',
+                'business_id'        => $business?->id,
+                'business_client_id' => $businessClientId,
+                'workspace_id'       => $workspace?->id,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'detail' => $this->resolveCreateUserError($e),
+                'code'   => 'signup_failed',
+            ], $this->resolveCreateUserStatus($e));
+        }
+
+        return response()->json([
+            'status'      => 'created',
+            'role'        => $user->role,
+            'email'       => $user->email,
+            'external_id' => $user->external_id,
+        ]);
+    }
+
+    /**
      * Create a workspace user in FastAPI first, then persist the linked Laravel copy.
      */
     public function createUser(Request $request): JsonResponse

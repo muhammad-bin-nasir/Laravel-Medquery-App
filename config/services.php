@@ -44,6 +44,11 @@ return [
         'base_url' => env('PROJECT_API_BASE_URL', 'http://127.0.0.1:8000/api'),
     ],
 
+    'stripe' => [
+        'publishable_key' => env('STRIPE_PUBLISHABLE_KEY', 'pk_test_placeholder'),
+        'secret'          => env('STRIPE_SECRET_KEY', 'sk_test_placeholder'),
+    ],
+
     'fastapi' => [
         'base_url' => env('FASTAPI_BASE_URL', 'http://127.0.0.1:8000'),
         'token' => env('FASTAPI_TOKEN'),

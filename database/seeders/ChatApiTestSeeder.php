@@ -123,5 +123,47 @@ class ChatApiTestSeeder extends Seeder
                 ['id' => (string) Str::uuid(), 'value' => (string) env('OPENAI_API_KEY')]
             );
         }
+
+        // Default tenant for self-registered users
+        $defaultBusiness = Business::query()->firstOrCreate(
+            ['business_client_id' => 'default'],
+            [
+                'id' => (string) Str::uuid(),
+                'name' => 'Default',
+            ]
+        );
+
+        $defaultWorkspace = Workspace::query()->firstOrCreate(
+            [
+                'business_id' => $defaultBusiness->id,
+                'workspace_id' => 'default',
+            ],
+            [
+                'business_client_id' => $defaultBusiness->business_client_id,
+                'id' => (string) Str::uuid(),
+                'name' => 'Default',
+            ]
+        );
+
+        WorkspaceConfig::query()->firstOrCreate(
+            [
+                'business_id' => $defaultBusiness->id,
+                'workspace_id' => $defaultWorkspace->id,
+            ],
+            [
+                'id' => (string) Str::uuid(),
+                'chunk_words' => 300,
+                'overlap_words' => 50,
+                'top_k' => 5,
+                'similarity_threshold' => 0.2,
+                'max_context_chars' => 12000,
+                'embedding_model' => 'text-embedding-3-small',
+                'use_local_embeddings' => false,
+                'chat_model_default' => 'gpt-4.1-mini',
+                'chat_temperature_default' => 0.2,
+                'chat_max_tokens_default' => 600,
+                'prompt_engineering' => 'You are a helpful assistant.',
+            ]
+        );
     }
 }
