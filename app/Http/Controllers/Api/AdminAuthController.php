@@ -26,6 +26,18 @@ class AdminAuthController extends Controller
     }
 
     /**
+     * Public: reports whether the initial admin account still needs to be created, so the
+     * frontend can decide whether to show the admin-setup toggle on the signup page. This does
+     * NOT gate whether regular users can self-register — that's always allowed.
+     */
+    public function setupStatus(): JsonResponse
+    {
+        return response()->json([
+            'needs_setup' => User::query()->whereIn('role', ['admin', 'super_admin'])->doesntExist(),
+        ]);
+    }
+
+    /**
      * Authenticate an admin or user and return an access token with any resolved scope.
      */
     public function login(Request $request): JsonResponse
@@ -190,6 +202,9 @@ class AdminAuthController extends Controller
             $externalId      = (string) ($projectUser['user_id'] ?? '');
             $businessClientId = (string) ($projectUser['business_client_id'] ?? 'default');
             $workspaceSlug    = (string) ($projectUser['workspace_id'] ?? 'default');
+            $assignedRole     = in_array((string) ($projectUser['role'] ?? 'user'), ['admin', 'user'], true)
+                ? (string) ($projectUser['role'])
+                : 'user';
 
             if ($externalId === '') {
                 throw new RuntimeException('Project API user-signup did not return a user_id');
@@ -208,11 +223,17 @@ class AdminAuthController extends Controller
                 'email'              => $emailNormalized,
                 'email_normalized'   => $emailNormalized,
                 'password_hash'      => $passwordHash,
-                'role'               => 'user',
+                'role'               => $assignedRole,
                 'business_id'        => $business?->id,
                 'business_client_id' => $businessClientId,
                 'workspace_id'       => $workspace?->id,
             ]);
+
+            // If the first user signed up, make them the business owner
+            if ($assignedRole === 'admin' && $business && !$business->admin_id) {
+                $business->admin_id = $user->id;
+                $business->save();
+            }
         } catch (Throwable $e) {
             report($e);
 

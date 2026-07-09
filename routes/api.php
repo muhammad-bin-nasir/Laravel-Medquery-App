@@ -23,6 +23,9 @@ Route::prefix('admin/auth')->group(function (): void {
     });
 });
 
+// Public endpoint: returns whether any users exist (used by frontend to decide signup vs login)
+Route::get('/setup/status', [AdminAuthController::class, 'setupStatus']);
+
 Route::post('aadmin/auth/login', [AdminAuthController::class, 'login']);
 
 Route::prefix('admin/system-config')->middleware(['admin.auth'])->group(function (): void {
