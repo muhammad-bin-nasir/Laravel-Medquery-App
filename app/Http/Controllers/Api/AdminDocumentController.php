@@ -45,8 +45,8 @@ class AdminDocumentController extends Controller
         }
 
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if (!in_array($extension, ['pdf', 'txt'], true)) {
-            return response()->json(['detail' => 'Unsupported file type. Only PDF and TXT files are supported.'], 400);
+        if ($extension !== 'pdf') {
+            return response()->json(['detail' => 'Only PDF files are supported.'], 400);
         }
 
         $maxSize = 50 * 1024 * 1024;

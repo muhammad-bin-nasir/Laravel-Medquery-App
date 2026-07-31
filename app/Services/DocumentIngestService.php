@@ -7,12 +7,13 @@ use App\Models\DocumentChunk;
 use App\Models\WorkspaceConfig;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Smalot\PdfParser\Parser;
 
 class DocumentIngestService
 {
-    public function __construct(private readonly RagRetrievalService $ragRetrievalService)
-    {
+    public function __construct(
+        private readonly RagRetrievalService $ragRetrievalService,
+        private readonly OcrService $ocrService
+    ) {
     }
 
     public function ingestDocument(Document $document, ?WorkspaceConfig $config = null, ?int $chunkWords = null, ?int $overlapWords = null): void
@@ -27,50 +28,28 @@ class DocumentIngestService
             return;
         }
 
+        // Only accept PDFs
+        if ($document->file_type !== 'pdf') {
+            $this->markFailed($document, 'Only PDF files are supported');
+            return;
+        }
+
         try {
-            if ($document->file_type === 'txt') {
-                $text = trim((string) Storage::get($document->storage_path));
-                $this->persistChunks($document, $this->chunkText($text, $effectiveChunkWords, $effectiveOverlapWords));
+            // Extract text with auto-detection (selectable text vs OCR)
+            $extractionResult = $this->ocrService->extractFromPdf($document->storage_path);
+            $text = $extractionResult['text'];
+            $isOcr = $extractionResult['is_ocr'];
+
+            if (trim($text) === '') {
+                $this->markFailed($document, 'No text extracted from PDF');
                 return;
             }
 
-            if ($document->file_type === 'pdf') {
-                $chunks = $this->extractPdfChunks($document, $effectiveChunkWords, $effectiveOverlapWords);
-                $this->persistChunks($document, $chunks);
-                return;
-            }
-
-            $this->markFailed($document, 'Unsupported file type for ingestion');
+            $chunks = $this->chunkText($text, $effectiveChunkWords, $effectiveOverlapWords);
+            $this->persistChunks($document, $chunks, $isOcr);
         } catch (\Throwable $e) {
             $this->markFailed($document, 'Ingestion failed: '.$e->getMessage());
         }
-    }
-
-    private function extractPdfChunks(Document $document, int $chunkWords, int $overlapWords): array
-    {
-        $absolutePath = Storage::path($document->storage_path);
-        $parser = new Parser();
-        $pdf = $parser->parseFile($absolutePath);
-
-        $allChunks = [];
-        $chunkIndex = 0;
-        $pages = $pdf->getPages();
-
-        foreach ($pages as $pageNumber => $page) {
-            $pageText = trim((string) $page->getText());
-            $pageChunks = $this->chunkText($pageText, $chunkWords, $overlapWords);
-
-            foreach ($pageChunks as $chunk) {
-                $allChunks[] = [
-                    'chunk_index' => $chunkIndex,
-                    'page_number' => $pageNumber + 1,
-                    'content' => $chunk['content'],
-                ];
-                $chunkIndex++;
-            }
-        }
-
-        return $allChunks;
     }
 
     private function chunkText(string $text, int $chunkWords, int $overlapWords): array
@@ -109,9 +88,9 @@ class DocumentIngestService
         return $chunks;
     }
 
-    private function persistChunks(Document $document, array $chunks): void
+    private function persistChunks(Document $document, array $chunks, bool $isOcr = false): void
     {
-        DB::transaction(function () use ($document, $chunks): void {
+        DB::transaction(function () use ($document, $chunks, $isOcr): void {
             DocumentChunk::query()->where('document_id', $document->id)->delete();
 
             foreach ($chunks as $chunk) {
@@ -130,9 +109,10 @@ class DocumentIngestService
 
             $document->status = 'indexed';
             $document->indexed_at = now();
+            $extractionMethod = $isOcr ? 'OCR' : 'text extraction';
             $document->meta_json = empty($chunks)
-                ? 'Indexed successfully (no extractable text found)'
-                : 'Indexed successfully';
+                ? "Indexed successfully via $extractionMethod (no chunks created)"
+                : "Indexed successfully via $extractionMethod";
             $document->save();
         });
     }
