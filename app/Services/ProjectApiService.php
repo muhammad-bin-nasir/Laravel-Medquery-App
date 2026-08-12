@@ -1,0 +1,245 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class ProjectApiException extends RuntimeException
+{
+    private int $status;
+    private array|string|null $body;
+
+    public function __construct(string $message, int $status, array|string|null $body = null)
+    {
+        parent::__construct($message);
+        $this->status = $status;
+        $this->body = $body;
+    }
+
+    public function getStatus(): int
+    {
+        return $this->status;
+    }
+
+    public function getBody(): array|string|null
+    {
+        return $this->body;
+    }
+}
+
+class ProjectApiService
+{
+    private string $baseUrl;
+    private ?string $token = null;
+
+    public function __construct()
+    {
+        $this->baseUrl = rtrim(config('services.project.base_url', 'http://127.0.0.1:8000/api'), '/');
+    }
+
+    public function withToken(?string $token): self
+    {
+        $this->token = $token;
+        return $this;
+    }
+
+    private function client(): PendingRequest
+    {
+        $client = Http::baseUrl($this->baseUrl)
+            ->acceptJson()
+            ->timeout(120);
+
+        if ($this->token) {
+            $client = $client->withToken($this->token);
+        }
+
+        return $client;
+    }
+
+    private function handleResponse(Response $response, string $endpoint): array
+    {
+        if (!$response->successful()) {
+            $body = null;
+            try {
+                $body = $response->json();
+            } catch (\Throwable) {
+                $body = $response->body();
+            }
+
+            throw new ProjectApiException(
+                sprintf('Project API request failed: %s returned %s', $endpoint, $response->status()),
+                $response->status(),
+                $body
+            );
+        }
+
+        $json = $response->json();
+        if (!is_array($json)) {
+            throw new ProjectApiException('Project API returned invalid JSON for '.$endpoint, $response->status(), $response->body());
+        }
+
+        return $json;
+    }
+
+    public function chatGenerate(array $payload): array
+    {
+        $response = $this->client()->post('/chat/generate', $payload);
+        return $this->handleResponse($response, '/chat/generate');
+    }
+
+    public function createUser(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/create-user', $payload);
+        return $this->handleResponse($response, '/admin/auth/create-user');
+    }
+
+    public function createAdmin(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/create-admin', $payload);
+        return $this->handleResponse($response, '/admin/auth/create-admin');
+    }
+
+    public function userSignup(array $payload): array
+    {
+        $response = $this->client()->post('/admin/auth/user-signup', $payload);
+        return $this->handleResponse($response, '/admin/auth/user-signup');
+    }
+
+    public function createBusiness(array $payload): array
+    {
+        $response = $this->client()->post('/admin/businesses', $payload);
+        return $this->handleResponse($response, '/admin/businesses');
+    }
+
+    public function updateBusiness(string $business_client_id, array $payload): array
+    {
+        $response = $this->client()->put("/admin/businesses/{$business_client_id}", $payload);
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}");
+    }
+
+    public function createWorkspace(string $business_client_id, array $payload): array
+    {
+        $response = $this->client()->post("/admin/businesses/{$business_client_id}/workspaces", $payload);
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces");
+    }
+
+    public function updateWorkspace(string $business_client_id, string $workspace_id, array $payload): array
+    {
+        $response = $this->client()->put(
+            "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}",
+            $payload
+        );
+        return $this->handleResponse(
+            $response,
+            "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}"
+        );
+    }
+
+    public function listWorkspaces(string $business_client_id): array
+    {
+        $response = $this->client()->get("/admin/businesses/{$business_client_id}/workspaces");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces");
+    }
+
+    public function getWorkspace(string $business_client_id, string $workspace_id): array
+    {
+        $response = $this->client()->get("/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+    }
+
+    public function deleteUser(string $userId): array
+    {
+        $response = $this->client()->delete("/admin/auth/users/{$userId}");
+        return $this->handleResponse($response, "/admin/auth/users/{$userId}");
+    }
+
+    public function deleteBusiness(string $business_client_id): array
+    {
+        $response = $this->client()->delete("/admin/businesses/{$business_client_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}");
+    }
+
+    public function deleteWorkspace(string $business_client_id, string $workspace_id): array
+    {
+        $response = $this->client()->delete("/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+        return $this->handleResponse($response, "/admin/businesses/{$business_client_id}/workspaces/{$workspace_id}");
+    }
+
+    public function streamChat(array $payload): StreamedResponse
+    {
+        $response = $this->client()
+            ->withHeaders(['Accept' => 'text/event-stream'])
+            ->withOptions(['stream' => true])
+            ->post('/chat/stream', $payload);
+
+        if (!$response->successful()) {
+            $body = null;
+            try {
+                $body = $response->json();
+            } catch (\Throwable) {
+                $body = $response->body();
+            }
+
+            throw new ProjectApiException(
+                sprintf('Project API request failed: %s returned %s', '/chat/stream', $response->status()),
+                $response->status(),
+                $body
+            );
+        }
+
+        $stream = $response->toPsrResponse()->getBody();
+
+        return response()->stream(function () use ($stream): void {
+            while (!$stream->eof()) {
+                echo $stream->read(4096);
+                @ob_flush();
+                flush();
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    public function getMyChatHeaders(): array
+    {
+        $response = $this->client()->get('/chat/headers/me');
+
+        return $this->handleResponse($response, '/chat/headers/me');
+    }
+    
+    public function getChatThread(string $chat_id): array
+    {
+        $response = $this->client()->get("/chat/threads/{$chat_id}");
+        
+        return $this->handleResponse($response, "/chat/threads/{$chat_id}");
+    }
+    
+    public function deleteChatHeader(string $chat_id): array
+    {
+        $response = $this->client()->delete("/chat/headers/{$chat_id}");
+        
+        return $this->handleResponse($response, "/chat/headers/{$chat_id}");
+    }
+
+    public function renameChatHeader(string $chat_id, array $payload): array
+    {
+        $response = $this->client()->patch("/chat/headers/{$chat_id}", $payload);
+
+        return $this->handleResponse($response, "/chat/headers/{$chat_id}");
+    }
+
+    public function createChatHeader(array $payload): array
+    {
+        $response = $this->client()->post('/chat/headers', $payload);
+
+        return $this->handleResponse($response, '/chat/headers');
+    }
+}
